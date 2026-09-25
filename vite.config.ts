@@ -8,8 +8,9 @@ import { defineConfig } from 'vitest/config';
 const PAGES_BASE = '/WebMDR/';
 
 // Optional visit counter for the owner's deployment only: set WEBMDR_GOATCOUNTER to a
-// GoatCounter count endpoint (e.g. https://NAME.goatcounter.com/count). It is loaded as
-// an image, so no third-party script runs. Unset (local builds, forks), nothing is added.
+// GoatCounter count endpoint (e.g. https://NAME.goatcounter.com/count). The page requests
+// it as an image (src/ui/main.ts), so no third-party script runs. Unset (local builds,
+// forks), nothing is added.
 const COUNTER = counterEndpoint(process.env.WEBMDR_GOATCOUNTER);
 
 function counterEndpoint(value: string | undefined): URL | undefined {
@@ -47,18 +48,12 @@ function buildId(): string {
 }
 
 function productionHardening(): Plugin {
-  let base = '/';
   return {
     name: 'webmdr-production',
     apply: 'build',
-    configResolved(config) {
-      base = config.base;
-    },
     transformIndexHtml: () => [
       { tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: CSP }, injectTo: 'head-prepend' },
-      ...(COUNTER
-        ? [{ tag: 'img', attrs: { src: `${COUNTER.href}?p=${encodeURIComponent(base)}`, alt: '', width: '1', height: '1', hidden: true }, injectTo: 'body' as const }]
-        : []),
+      ...(COUNTER ? [{ tag: 'meta', attrs: { name: 'webmdr-counter', content: COUNTER.href }, injectTo: 'head' as const }] : []),
     ],
     generateBundle() {
       // Required notice for adapted MIT material ships with the deployed site.

@@ -406,6 +406,16 @@ controller.subscribe((state) => {
   render(state);
 });
 
+// Visit counter, present only in the owner's deployment (vite.config.ts). An image request:
+// the page path plus `?ref=` if given, else the browser's referrer. Nothing about the device.
+const counter = document.querySelector<HTMLMetaElement>('meta[name="webmdr-counter"]')?.content;
+if (counter) {
+  const url = new URL(counter);
+  url.searchParams.set('p', location.pathname);
+  url.searchParams.set('r', new URLSearchParams(location.search).get('ref') ?? document.referrer);
+  document.body.append(Object.assign(new Image(1, 1), { src: url.href, hidden: true, alt: '' }));
+}
+
 void (async () => {
   if (!serial) return;
   // Previously authorized headphones are offered for a manual connect, never opened automatically.
