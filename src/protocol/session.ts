@@ -42,6 +42,14 @@ interface OperationInfo {
 export interface RequestOperation<T> extends OperationInfo {
   kind: 'init' | 'get';
   match(payload: Uint8Array): Match<T>;
+  /**
+   * Informational query the device may not answer. If it was ACKed (so both
+   * sides agree on sequence state) but no reply came, the timeout ends only this
+   * request instead of desynchronizing the session. Only for reply families that
+   * are never requested again on the same connection, so a late reply cannot be
+   * mistaken for a fresh one; the caller must not retry it.
+   */
+  optional?: boolean;
 }
 
 /** An operation completed by protocol receipt (ACK) alone. */
@@ -97,6 +105,7 @@ export interface SessionOptions {
 interface Pending {
   op: OperationInfo;
   match?: (payload: Uint8Array) => Match<unknown>;
+  optional: boolean;
   receipt: Receipt;
   writeStarted: boolean;
   /** Identifies this operation's queued write so a timeout can withdraw it. */
@@ -179,6 +188,7 @@ export class Session {
         op,
         receipt: { seq: frame.seq, writeCompleted: false, ack: 'none' },
         writeStarted: false,
+        optional: 'optional' in op && op.optional === true,
         onStart: () => {
           pending.writeStarted = true;
           this.emit({ type: 'tx', frame, purpose: op.purpose });
@@ -234,6 +244,10 @@ export class Session {
       const i = this.dataQueue.findIndex((item) => item.onStart === pending.onStart);
       if (i >= 0) this.dataQueue.splice(i, 1)[0]!.reject(new Error('withdrawn after timeout'));
       this.settle(pending, new SessionError('timeout', 'not-sent', `${pending.op.id}: timed out before transmission`));
+      return;
+    }
+    if (pending.optional && pending.receipt.ack === 'valid') {
+      this.settle(pending, new SessionError('timeout', 'unknown', `${pending.op.id}: ACKed but no reply (optional query)`));
       return;
     }
     // Ambiguous: a late reply could not be told apart from a fresh one. Stop the pipeline.

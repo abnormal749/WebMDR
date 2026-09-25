@@ -19,4 +19,6 @@ Repository `marconvcm/sony-device-center`, commit `dea38969b501a4a167f330dff1044
 
 Reviewed but **not** translated: `SonyProtocolSession.cpp` (buffered-reply reuse, unvalidated ACKs; see technical review §2), `CapabilityDiscovery.cpp` (query-sweep probing) and the name-based identification in `DeviceProfileRegistry.cpp`. `src/protocol/session.ts` is an independent design; it relies only on two dialect facts from the session source (host ACK sequence `1 - (seq & 1)`, device ACK sequence adopted as the next TX sequence), noted in its header.
 
-No Gadgetbridge (AGPLv3) material is used.
+| `src/protocol/deviceInfo.ts` | `libs/sony-protocol/src/ProtocolV1.cpp`, `ProtocolV2.cpp` (`getFirmwareVersion`) | Request bytes and reply layout (`04 02 -> 05 02 <len> <ASCII>`) | Exact length and printable-ASCII checks; marked optional so an unanswered reply ends only this request |
+
+No Gadgetbridge (AGPLv3) code or text is used. Its V1/V2 Sony implementations were read on 2026-09-25 for protocol facts only: they confirm the firmware query bytes, contain no model-name query, and select noise-control subtype `0x15` or `0x17` per device (WebMDR uses `0x17`, verified on the XM5).

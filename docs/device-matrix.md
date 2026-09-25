@@ -152,4 +152,6 @@ Use separate results rather than one ambiguous “supported” badge:
 
 For each future report, record date, exact model/firmware, OS/browser versions, app commit, origin, service UUID, feature and result. Missing data should remain missing; do not backfill from unrelated machine history.
 
+The firmware query (`04 02`) added after H-006 has not yet been observed on hardware.
+
 No other model has been tested in WebMDR. Models that upstream lists are candidates only; they are shown with their evidence in `src/protocol/profiles.ts` and the page's Devices section, not in this matrix, until a hardware report exists. Native upstream support is tracked separately as candidate evidence, not copied into this matrix.

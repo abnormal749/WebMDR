@@ -3,6 +3,7 @@
 
 import { mergeEdits, type NoiseEdit, type NoiseState } from '../features/noiseControl';
 import { toHex } from '../protocol/codec';
+import { firmwareOperation } from '../protocol/deviceInfo';
 import { dialectFor, type NoiseDialect } from '../protocol/dialect';
 import type { Profile } from '../protocol/profiles';
 import { Session, SessionError, type ByteChannel, type Receipt, type SessionEvent, type SessionMode } from '../protocol/session';
@@ -35,23 +36,33 @@ export interface NoiseView {
   last?: ChangeResult;
 }
 
+export type Firmware =
+  | { status: 'reading' }
+  | { status: 'known'; version: string }
+  | { status: 'unavailable'; reason: string };
+
 export interface ControllerState {
   phase: Phase;
   mode?: SessionMode;
   /** Profile of the connected service; undefined when idle. */
   profile?: Profile;
+  firmware?: Firmware | undefined;
+  /** User opted in to changes on a protocol whose writes are not hardware-verified. */
+  unverifiedWritesAllowed: boolean;
   detail: string;
   noise: NoiseView;
 }
 
 export interface ControllerOptions {
   timeoutMs?: number;
+  /** Query the firmware version after the state read (default true). */
+  readFirmware?: boolean;
   /** Diagnostic lines (frame hex, parse errors). Only collected if the caller wants them. */
   onLog?: (line: string) => void;
 }
 
 export class Controller {
-  private _state: ControllerState = { phase: 'idle', detail: 'Not connected', noise: {} };
+  private _state: ControllerState = { phase: 'idle', detail: 'Not connected', noise: {}, unverifiedWritesAllowed: false };
   private readonly listeners = new Set<(s: ControllerState) => void>();
   private session: Session | undefined;
   /** Identifies the current connection; results from older ones are dropped. */
@@ -73,8 +84,20 @@ export class Controller {
       s.mode === 'control' &&
       s.noise.device !== undefined &&
       s.profile !== undefined &&
-      s.profile.noiseControl.write !== 'unsupported'
+      (s.profile.noiseControl.write === 'hardware-verified' ||
+        (s.profile.noiseControl.write === 'source-reviewed' && s.unverifiedWritesAllowed))
     );
+  }
+
+  /** Whether writes on the connected protocol need the explicit opt-in. */
+  get needsOptIn(): boolean {
+    return this._state.profile?.noiseControl.write === 'source-reviewed' && !this._state.unverifiedWritesAllowed;
+  }
+
+  /** Explicit user choice to allow changes that are untested on hardware; cleared on disconnect. */
+  allowUnverifiedWrites(allowed: boolean): void {
+    this.set({ unverifiedWritesAllowed: allowed });
+    if (allowed) void this.drain();
   }
 
   /** Meaning of a raw state from the current connection's dialect. */
@@ -99,7 +122,15 @@ export class Controller {
       onEvent: (e) => this.onSessionEvent(connection, e),
     });
     this.session = session;
-    this.set({ phase: mode === 'passive' ? 'observing' : 'initializing', mode, profile, detail: 'Port open', noise: {} });
+    this.set({
+      phase: mode === 'passive' ? 'observing' : 'initializing',
+      mode,
+      profile,
+      detail: 'Port open',
+      noise: {},
+      firmware: undefined,
+      unverifiedWritesAllowed: false,
+    });
     void session.closed.then((reason) => this.onClosed(connection, reason));
 
     if (mode === 'passive') {
@@ -124,8 +155,25 @@ export class Controller {
     } catch (error) {
       if (connection !== this.connection) return;
       this.set({ phase: 'failed', detail: `Not protocol-ready: ${describe(error)}` });
-    } finally {
-      if (connection === this.connection) this.work = undefined;
+      this.work = undefined;
+      return;
+    }
+    if (this.options.readFirmware !== false) await this.readFirmware(connection, session, dialect);
+    if (connection !== this.connection) return;
+    this.work = undefined;
+    void this.drain(); // an edit committed during initialization
+  }
+
+  /** Informational and asked once per connection; never retried. */
+  private async readFirmware(connection: number, session: Session, dialect: NoiseDialect<Raw>): Promise<void> {
+    this.set({ firmware: { status: 'reading' } });
+    try {
+      const { value } = await session.request(firmwareOperation(dialect.profile.dialect));
+      if (connection === this.connection) this.set({ firmware: { status: 'known', version: value } });
+    } catch (error) {
+      if (connection !== this.connection) return;
+      this.set({ firmware: { status: 'unavailable', reason: describe(error) } });
+      this.onFailure(error);
     }
   }
 
@@ -239,7 +287,13 @@ export class Controller {
       ? { kind: 'unknown', target: inFlight.target, detail: 'disconnected before confirmation' }
       : last;
     // The profile stays so the kept outcome can still be described.
-    this.set({ phase: 'idle', detail: `Disconnected: ${reason}`, noise: outcome ? { last: outcome } : {} });
+    this.set({
+      phase: 'idle',
+      detail: `Disconnected: ${reason}`,
+      noise: outcome ? { last: outcome } : {},
+      firmware: undefined,
+      unverifiedWritesAllowed: false,
+    });
   }
 
   private onSessionEvent(connection: number, e: SessionEvent): void {

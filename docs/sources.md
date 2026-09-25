@@ -31,6 +31,8 @@ Before importing implementation, record the source revision, exact path, local d
 
 [Gadgetbridge](https://gadgetbridge.org/) identifies its application and documentation as AGPLv3. Its current project links lead to Codeberg. No Gadgetbridge implementation is copied into this documentation bundle, and its Sony implementation was not line-by-line audited here. Check exact file licensing before reuse; a change of programming language does not erase licensing questions.
 
+Read on 2026-09-25 for protocol facts only (no code or text copied), from the Codeberg `master` branch (not pinned): `service/devices/sony/headphones/protocol/impl/v1/SonyProtocolImplV1.java` and `.../v2/SonyProtocolImplV2.java`, both AGPLv3. Findings used in WebMDR: firmware query `04 02 -> 05 <len> <ASCII>`, no model-name query, and noise-control subtype `0x15` or `0x17` chosen per device.
+
 ## Browser and hosting
 
 | Primary source | Scope |

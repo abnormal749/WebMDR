@@ -122,6 +122,7 @@ class FakeV1 {
         // Report setting type 02, as upstream's fixtures do, whatever was set.
         if (p[0] === 0x68) this.state = Uint8Array.of(0x67, 0x02, p[2]!, 0x02, p[4]!, 0x01, p[6]!, p[7]!);
         if (p[0] === 0x66) this.send(this.state);
+        if (p[0] === 0x04) this.send(Uint8Array.of(0x05, 0x02, 0x05, ...Array.from('3.0.1', (ch) => ch.charCodeAt(0))));
       }
     };
   }
@@ -140,13 +141,21 @@ describe('controller over V1', () => {
     const device = new FakeV1(channel);
     const controller = new Controller({ timeoutMs: 1000 });
     await controller.attach(channel, 'control', SONY_V1);
-    expect(device.received).toEqual([[0x66, 0x02]]);
+    expect(device.received).toEqual([[0x66, 0x02], [0x04, 0x02]]);
     expect(controller.state.phase).toBe('ready');
+    expect(controller.state.firmware).toEqual({ status: 'known', version: '3.0.1' });
+    // V1 writes are untested on hardware: nothing is sent without the explicit opt-in.
+    expect(controller.canChange).toBe(false);
+    expect(controller.needsOptIn).toBe(true);
+    controller.commit({ mode: 'ambient', level: 12 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(device.received).toHaveLength(2);
+    controller.allowUnverifiedWrites(true);
     expect(controller.view(controller.state.noise.device!.raw)).toEqual({ mode: 'noise-cancelling', level: 0, voice: false });
 
     controller.commit({ mode: 'ambient', level: 12 });
     await vi.advanceTimersByTimeAsync(0);
-    expect(device.received.slice(1)).toEqual([[0x68, 0x02, 0x11, 0x01, 0x00, 0x01, 0x00, 12], [0x66, 0x02]]);
+    expect(device.received.slice(2)).toEqual([[0x68, 0x02, 0x11, 0x01, 0x00, 0x01, 0x00, 12], [0x66, 0x02]]);
     expect(controller.state.noise.last).toMatchObject({ kind: 'confirmed' });
     expect(device.received.flat()).not.toContain(0x22);
   });

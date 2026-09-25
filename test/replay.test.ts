@@ -37,7 +37,8 @@ function parse(capture: string): Line[] {
 
 async function replay(lines: Line[], actions: Record<string, Action>): Promise<{ produced: string[]; controller: Controller }> {
   const produced: string[] = [];
-  const controller = new Controller({ onLog: (line) => produced.push(line) });
+  // The captures predate the firmware query, so it is not sent here.
+  const controller = new Controller({ onLog: (line) => produced.push(line), readFirmware: false });
   let channel = new FakeChannel();
   let rxGroup: number[] = [];
   const flush = () => vi.advanceTimersByTimeAsync(0);

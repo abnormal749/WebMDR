@@ -11,6 +11,7 @@ class FakeXm5 {
   deviceSeq = 0;
   silent = new Set<number>(); // opcodes to ignore entirely
   applySets = true;
+  answersFirmware = true; // ACKs 04 02 either way
   received: number[][] = [];
   private readonly parser = new FrameParser();
 
@@ -32,6 +33,7 @@ class FakeXm5 {
     this.channel.deliver(encodeFrame({ type: FrameType.Ack, seq: 1 - seq, payload: new Uint8Array() }));
     if (p[0] === 0x00) this.send([0x01, 0x00, 0x03, 0x00, 0x20, 0x16, 0x00, 0x00]); // H-003 reply
     if (p[0] === 0x66) this.send([0x67, 0x17, 0x01, this.state.effect, this.state.settingType, this.state.voice, this.state.level]);
+    if (p[0] === 0x04 && this.answersFirmware) this.send([0x05, 0x02, 0x05, ...Array.from('2.5.1', (ch) => ch.charCodeAt(0))]);
     if (p[0] === 0x68 && this.applySets) this.state = { effect: p[3]!, settingType: p[4]!, voice: p[5]!, level: p[6]! };
   }
 
@@ -59,7 +61,7 @@ describe('read-only session', () => {
     await controller.attach(channel, 'read-only', SONY_V2);
     expect(controller.state.phase).toBe('ready');
     expect(controller.state.noise.device).toEqual({ raw: device.state, via: 'reply' });
-    expect(device.received).toEqual([[0x00, 0x00], [0x66, 0x17]]);
+    expect(device.received).toEqual([[0x00, 0x00], [0x66, 0x17], [0x04, 0x02]]);
     expect(controller.canChange).toBe(false);
     controller.commit({ level: 3 });
     await flush();
@@ -100,6 +102,39 @@ describe('read-only session', () => {
     await flush();
     await controller.refresh();
     expect(device.received.every((p) => p[0] !== 0x22)).toBe(true);
+  });
+});
+
+describe('firmware version', () => {
+  it('is read once after the state read', async () => {
+    await controller.attach(channel, 'read-only', SONY_V2);
+    expect(controller.state.firmware).toEqual({ status: 'known', version: '2.5.1' });
+  });
+
+  it('a headset that ACKs but never answers stays fully usable', async () => {
+    device.answersFirmware = false;
+    const attached = controller.attach(channel, 'control', SONY_V2);
+    await vi.advanceTimersByTimeAsync(1000);
+    await attached;
+    expect(controller.state.phase).toBe('ready');
+    expect(controller.state.firmware?.status).toBe('unavailable');
+    controller.commit({ mode: 'off' });
+    await flush();
+    expect(controller.state.noise.last?.kind).toBe('confirmed');
+    expect(device.received.filter((p) => p[0] === 0x04)).toHaveLength(1); // never retried
+  });
+
+  it('sends a change committed while the firmware read is still pending', async () => {
+    device.answersFirmware = false;
+    const attached = controller.attach(channel, 'control', SONY_V2);
+    await flush();
+    expect(controller.state.phase).toBe('ready');
+    controller.commit({ level: 4 });
+    expect(device.received.some((p) => p[0] === 0x68)).toBe(false);
+    await vi.advanceTimersByTimeAsync(1000);
+    await attached;
+    await flush();
+    expect(device.received.filter((p) => p[0] === 0x68).at(-1)).toEqual([0x68, 0x17, 0x01, 1, 0, 0, 4]);
   });
 });
 
@@ -242,7 +277,7 @@ describe('noise-control change', () => {
     const next = new FakeChannel();
     const nextDevice = new FakeXm5(next);
     await controller.attach(next, 'control', SONY_V2);
-    expect(nextDevice.received).toEqual([[0x00, 0x00], [0x66, 0x17]]);
+    expect(nextDevice.received).toEqual([[0x00, 0x00], [0x66, 0x17], [0x04, 0x02]]);
     expect(controller.state.noise.last).toBeUndefined();
   });
 

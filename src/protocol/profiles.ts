@@ -55,8 +55,10 @@ export const SONY_V2: Profile = {
     inquiry: 0x17,
     levelRead: { min: 0, max: 20 },
     levelWrite: { min: 1, max: 20 },
-    read: 'source-reviewed',
-    write: 'source-reviewed',
+    // Verified on one WH-1000XM5 (H-003 to H-006). Other V2 models may use a different
+    // inquiry subtype (Gadgetbridge uses 0x15 for some); their read then fails safely.
+    read: 'hardware-verified',
+    write: 'hardware-verified',
     provenance:
       'Layout: ProtocolV2.cpp @ dea3896 (66/67/68 17; 69 per DeviceEventDispatcher.cpp). ' +
       'Levels 1-20 confirmed on a WH-1000XM5 (H-003, H-004); upstream HeadphonesBridge.mm also uses 20 for V2.',
