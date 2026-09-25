@@ -88,14 +88,38 @@ No diagnostic log was supplied, so this record contains no protocol capture and 
 | Power-off during session | Chrome reported `The device has been lost.`; session closed and controls disabled. The extra "cleanup failed" line came from cancelling an already-errored stream (fixed after this test) |
 | Reconnect after power-on | **Fail**: not possible, also from a new page. Error text not recorded; cause unknown (see below) |
 
-### Open issue: no reconnect after power-cycle
+## H-005 — WH-1000XM5 from the deployed site; button changes; power-off
 
-Not yet diagnosed. A fresh page failing too suggests state below the page (Chrome or macOS Bluetooth), but that is unconfirmed. Chrome documents that it closes an open Bluetooth serial port itself when the device goes away, and that a page may reopen it later. Needed evidence, with Diagnostics on and the build shown in the footer:
+| Field | Recorded value |
+| --- | --- |
+| Date | 2026-09-25 (log times UTC) |
+| Device | Sony WH-1000XM5 (user-operated); firmware not reported |
+| Browser | Chrome 154.0.8037.57 (arm64) as reported with H-004 minutes earlier; not re-reported; macOS version not reported |
+| Build / origin | `55184b0` at `https://abnormal749.github.io` (from the log header) |
+| Capture | Diagnostics log supplied in conversation; not stored as a fixture (no host-initiated changes to replay beyond H-003/H-004) |
 
-1. After power-on, the exact status text and `open failed:` log line from **Connect** in the same tab.
-2. Whether it works after closing every WebMDR tab and reopening the page.
-3. Whether it works after disconnecting and reconnecting the headset in macOS Bluetooth settings.
-4. Whether it works after quitting Chrome completely (⌘Q).
+| Stage | Result |
+| --- | --- |
+| Deployed-site checked | Pass for connect, init, state reads and notifications from the published HTTPS origin; no setting change in this log |
+| External changes (headset button) | Pass: seven `69 17 01 …` notifications cycling NC → Ambient → Off → NC were adopted; WebMDR sent no setter in response |
+| Close / reopen by user | Pass (one cycle) |
+| Power-off during session | Pass: session closed on `The device has been lost.` with no cleanup error (fix from `2461ce9`) |
+| Chrome events after power-off / power-on | 13 `disconnect` then 13 `connect` events at once; which ports they belonged to was not logged (now logged) |
+| Reopen after power-on | **Fail**: three attempts, each `NetworkError: Failed to open serial port.` after ~10 s, while Chrome reported the device available |
+| Recovery | Quitting Chrome restored reconnect (user report); the failure recurs after the next power-off (user report) |
+
+### Open issue: no reconnect after power-off until Chrome restarts
+
+The page closes the port cleanly (H-005 shows no cleanup error) and Chrome reports the device available again, yet `open()` times out until Chrome is restarted; a new page does not help. The stale state is therefore below the page, in Chrome's browser process or macOS Bluetooth. No page API is documented to clear it. A 2022 spec thread reports the same `Failed to open serial port` on reopen without resolution ([WICG/serial#156](https://github.com/WICG/serial/issues/156)).
+
+Workaround: quit Chrome (⌘Q) and reopen WebMDR. The page now shows this after such a failure.
+
+Experiments still to run, one per power-cycle, with Diagnostics on:
+
+1. **Forget headset**, then **Choose headset…** again: does `port.forget()` release the stale state?
+2. **Disconnect** in WebMDR *before* switching the headset off: is the failure specific to losing the device while the port is open?
+
+If neither helps, the evidence supports a Chromium bug report (not filed; needs the owner's decision and a search of existing reports first).
 
 ## Validation vocabulary
 

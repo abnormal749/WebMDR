@@ -43,3 +43,4 @@ button:disabled { cursor: default; opacity: 0.45; }
 input[type='range'] { width: 100%; }
 .state, .change { font-variant-numeric: tabular-nums; }
 pre { max-height: 20rem; overflow: auto; font-size: 0.8rem; border: 1px solid var(--line); padding: 0.5rem; white-space: pre-wrap; word-break: break-all; }
+#detail.bad { color: var(--bad); }

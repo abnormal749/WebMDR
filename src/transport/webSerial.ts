@@ -17,6 +17,8 @@ export interface SerialPortLike {
   getInfo(): SerialPortInfoLike;
   open(options: { baudRate: number }): Promise<void>;
   close(): Promise<void>;
+  /** Chrome 103+: revokes this origin's permission and releases the port. */
+  forget?(): Promise<void>;
 }
 
 export interface SerialLike {
@@ -25,7 +27,7 @@ export interface SerialLike {
     allowedBluetoothServiceClassIds: string[];
   }): Promise<SerialPortLike>;
   getPorts(): Promise<SerialPortLike[]>;
-  addEventListener?(type: 'connect' | 'disconnect', listener: () => void): void;
+  addEventListener?(type: 'connect' | 'disconnect', listener: (event: Event) => void): void;
 }
 
 /** Feature detection; says nothing about a device or platform being tested. */

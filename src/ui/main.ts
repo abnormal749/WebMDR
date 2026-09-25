@@ -25,6 +25,7 @@ const ui = {
   connect: $<HTMLButtonElement>('connect'),
   disconnect: $<HTMLButtonElement>('disconnect'),
   refresh: $<HTMLButtonElement>('refresh'),
+  forget: $<HTMLButtonElement>('forget'),
   stages: $('stages'),
   detail: $('detail'),
   deviceState: $('device-state'),
@@ -65,27 +66,40 @@ function selectedMode(): SessionMode {
   return value as SessionMode;
 }
 
+/** Error from the last user action; shown until the next action so render() cannot hide it. */
+let actionError: string | undefined;
+
 async function withBusy(task: () => Promise<void>): Promise<void> {
   busy = true;
+  actionError = undefined;
   render(controller.state);
   try {
     await task();
   } catch (error) {
-    ui.detail.textContent = describe(error);
+    actionError = describe(error) + (openNetworkError ? REOPEN_HINT : '');
   } finally {
     busy = false;
     render(controller.state);
   }
 }
 
+// H-005: after the headset powered off mid-session, Chrome 154 on macOS could not
+// reopen the port until Chrome was restarted, although cleanup had completed.
+const REOPEN_HINT =
+  ' If the headset was switched off while connected, Chrome may be unable to reopen it until Chrome restarts: ' +
+  'quit Chrome (⌘Q) and reopen WebMDR. “Forget headset” is an experimental alternative.';
+let openNetworkError = false;
+
 async function connect(): Promise<void> {
   if (!port) return;
+  openNetworkError = false;
   diag(`opening port (device available: ${port.connected ?? 'not reported'})`);
   let channel;
   try {
     channel = await openSerialChannel(port); // a second tab holding the port rejects here; no retry
   } catch (error) {
     diag(`open failed: ${describe(error)}`);
+    openNetworkError = error instanceof Error && error.name === 'NetworkError';
     throw error;
   }
   diag('port open');
@@ -109,6 +123,16 @@ ui.choose.addEventListener('click', () =>
 ui.connect.addEventListener('click', () => withBusy(connect));
 ui.disconnect.addEventListener('click', () => withBusy(() => controller.disconnect()));
 ui.refresh.addEventListener('click', () => void controller.refresh());
+ui.forget.addEventListener('click', () =>
+  withBusy(async () => {
+    if (!port?.forget) return;
+    diag('forgetting port (permission revoked; choose the headset again to reconnect)');
+    await port.forget();
+    port = undefined;
+    openNetworkError = false;
+    diag('port forgotten');
+  }),
+);
 ui.modeSet.addEventListener('change', () => render(controller.state));
 ui.optin.addEventListener('change', () => render(controller.state));
 ui.diag.addEventListener('change', () => {
@@ -155,8 +179,10 @@ disconnectOnPageHide(window, () => controller.disconnect(), (error) => console.e
 
 // Logical availability changes (Chrome 130+ for Bluetooth RFCOMM). Reconnect stays manual.
 for (const type of ['connect', 'disconnect'] as const) {
-  serial?.addEventListener?.(type, () => {
-    diag(`serial ${type} event (device available: ${port?.connected ?? 'not reported'})`);
+  serial?.addEventListener?.(type, (event) => {
+    const target = event.target as SerialPortLike | null;
+    const which = target === port ? 'selected port' : `other port, service ${String(target?.getInfo?.().bluetoothServiceClassId ?? 'unknown')}`;
+    diag(`serial ${type} event: ${which} (available: ${target?.connected ?? 'not reported'})`);
     render(controller.state);
   });
 }
@@ -175,6 +201,7 @@ function render(state: ControllerState): void {
   ui.connect.disabled = !serial || busy || connected || !port;
   ui.disconnect.disabled = busy || !connected || state.phase === 'closing';
   ui.refresh.disabled = state.phase !== 'ready';
+  ui.forget.disabled = !port?.forget || busy || connected;
 
   const available = port?.connected;
   const rows: [string, string][] = [
@@ -186,7 +213,8 @@ function render(state: ControllerState): void {
     ['Protocol ready', protocolLabel(state)],
   ];
   ui.stages.innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
-  if (!busy) ui.detail.textContent = state.detail;
+  ui.detail.textContent = actionError ?? state.detail;
+  ui.detail.classList.toggle('bad', actionError !== undefined);
 
   renderNoise(state);
 }
