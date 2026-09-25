@@ -12,9 +12,17 @@ check(/<meta http-equiv="Content-Security-Policy"[^>]*script-src &#39;self&#39;/
 check(!/<script(?![^>]*\bsrc=)[^>]*>/.test(html), 'index.html contains an inline script');
 check(!/<style[\s>]/.test(html), 'index.html contains an inline style block');
 
+// The owner's deployment may add one counter image (see vite.config.ts); nothing else external.
+const counter = process.env.WEBMDR_GOATCOUNTER ? new URL(process.env.WEBMDR_GOATCOUNTER) : undefined;
+const counterRef = counter && `${counter.href}?p=${encodeURIComponent(base)}`;
+if (counter) {
+  check(html.includes(`<img src="${counterRef.replaceAll('&', '&amp;')}"`), 'counter image missing');
+  check(new RegExp(`img-src &#39;self&#39; ${counter.origin}[;"]|img-src 'self' ${counter.origin}[;"]`).test(html), 'CSP img-src does not allow the counter origin');
+}
+
 const refs = [...html.matchAll(/\b(?:src|href)="([^"]+)"/g)].map((m) => m[1]);
 for (const ref of refs) {
-  if (ref === 'THIRD_PARTY_NOTICES.txt') continue;
+  if (ref === 'THIRD_PARTY_NOTICES.txt' || ref === counterRef) continue;
   check(!/^(https?:)?\/\//.test(ref), `external reference in index.html: ${ref}`);
   check(ref.startsWith(base), `reference not under base ${base}: ${ref}`);
   const file = `dist/${ref.slice(base.length)}`;

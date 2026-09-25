@@ -7,13 +7,27 @@ import { defineConfig } from 'vitest/config';
 // Override with WEBMDR_BASE=/ for a user site or custom domain.
 const PAGES_BASE = '/WebMDR/';
 
+// Optional visit counter for the owner's deployment only: set WEBMDR_GOATCOUNTER to a
+// GoatCounter count endpoint (e.g. https://NAME.goatcounter.com/count). It is loaded as
+// an image, so no third-party script runs. Unset (local builds, forks), nothing is added.
+const COUNTER = counterEndpoint(process.env.WEBMDR_GOATCOUNTER);
+
+function counterEndpoint(value: string | undefined): URL | undefined {
+  if (!value) return undefined;
+  const url = new URL(value);
+  if (url.protocol !== 'https:' || url.search || url.hash) {
+    throw new Error(`WEBMDR_GOATCOUNTER must be an https URL without query or fragment: ${value}`);
+  }
+  return url;
+}
+
 // Only same-origin, build-local scripts and styles. No network access is needed:
 // the device is reached through Web Serial, not fetch.
 export const CSP = [
   "default-src 'none'",
   "script-src 'self'",
   "style-src 'self'",
-  "img-src 'self'",
+  COUNTER ? `img-src 'self' ${COUNTER.origin}` : "img-src 'self'",
   "connect-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
@@ -33,11 +47,18 @@ function buildId(): string {
 }
 
 function productionHardening(): Plugin {
+  let base = '/';
   return {
     name: 'webmdr-production',
     apply: 'build',
+    configResolved(config) {
+      base = config.base;
+    },
     transformIndexHtml: () => [
       { tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: CSP }, injectTo: 'head-prepend' },
+      ...(COUNTER
+        ? [{ tag: 'img', attrs: { src: `${COUNTER.href}?p=${encodeURIComponent(base)}`, alt: '', width: '1', height: '1', hidden: true }, injectTo: 'body' as const }]
+        : []),
     ],
     generateBundle() {
       // Required notice for adapted MIT material ships with the deployed site.
