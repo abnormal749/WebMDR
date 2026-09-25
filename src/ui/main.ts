@@ -83,11 +83,12 @@ async function withBusy(task: () => Promise<void>): Promise<void> {
   }
 }
 
-// H-005: after the headset powered off mid-session, Chrome 154 on macOS could not
-// reopen the port until Chrome was restarted, although cleanup had completed.
+// H-005/H-006: after the headset has been switched off and on, Chrome 154 on macOS
+// cannot reopen the port until Chrome restarts, whatever the page did beforehand
+// (close, forget, re-select). See docs/device-matrix.md.
 const REOPEN_HINT =
-  ' If the headset was switched off while connected, Chrome may be unable to reopen it until Chrome restarts: ' +
-  'quit Chrome (⌘Q) and reopen WebMDR. “Forget headset” is an experimental alternative.';
+  ' Known issue: after the headset has been switched off and on, Chrome on macOS cannot reopen it ' +
+  'until Chrome restarts. Quit Chrome (⌘Q) and reopen WebMDR.';
 let openNetworkError = false;
 
 async function connect(): Promise<void> {
@@ -126,7 +127,7 @@ ui.refresh.addEventListener('click', () => void controller.refresh());
 ui.forget.addEventListener('click', () =>
   withBusy(async () => {
     if (!port?.forget) return;
-    diag('forgetting port (permission revoked; choose the headset again to reconnect)');
+    diag('forgetting port (permission revoked)');
     await port.forget();
     port = undefined;
     openNetworkError = false;

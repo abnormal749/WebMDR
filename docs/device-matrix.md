@@ -108,18 +108,33 @@ No diagnostic log was supplied, so this record contains no protocol capture and 
 | Reopen after power-on | **Fail**: three attempts, each `NetworkError: Failed to open serial port.` after ~10 s, while Chrome reported the device available |
 | Recovery | Quitting Chrome restored reconnect (user report); the failure recurs after the next power-off (user report) |
 
-### Open issue: no reconnect after power-off until Chrome restarts
+## H-006 — reconnect experiments
 
-The page closes the port cleanly (H-005 shows no cleanup error) and Chrome reports the device available again, yet `open()` times out until Chrome is restarted; a new page does not help. The stale state is therefore below the page, in Chrome's browser process or macOS Bluetooth. No page API is documented to clear it. A 2022 spec thread reports the same `Failed to open serial port` on reopen without resolution ([WICG/serial#156](https://github.com/WICG/serial/issues/156)).
+Same device and browser as H-005 (not re-reported). Diagnostics logs supplied in conversation; not stored as fixtures.
 
-Workaround: quit Chrome (⌘Q) and reopen WebMDR. The page now shows this after such a failure.
+| Build / origin | Page actions before power-off | After power-on | Result |
+| --- | --- | --- | --- |
+| `55184b0`, Pages | Session open | Connect ×2 | **Fail**: `NetworkError: Failed to open serial port` after ~10 s |
+| `55184b0`, Pages | Disconnect (session closed) | Connect ×2 | **Fail**, same error |
+| `c1bdf8c`, Pages | Disconnect | Connect; then Forget + Choose + Connect, twice | **Fail**, same error each time |
+| `c1bdf8c`, Pages | Disconnect, then Forget | Choose + Connect ×2 | **Fail**, same error; the newly chosen port reported `connected: false` |
 
-Experiments still to run, one per power-cycle, with Diagnostics on:
+Other results from these logs:
 
-1. **Forget headset**, then **Choose headset…** again: does `port.forget()` release the stale state?
-2. **Disconnect** in WebMDR *before* switching the headset off: is the failure specific to losing the device while the port is open?
+- The headset exposes 13 Bluetooth serial services; Chrome dispatches a `connect`/`disconnect` event for each on power-on/off, the selected port being one of them.
+- Live level dragging on hardware: sequences such as 5 → 2 → 1 → 3 → 20 → 18 → 12, intermediate positions dropped, each sent value confirmed by read-back.
 
-If neither helps, the evidence supports a Chromium bug report (not filed; needs the owner's decision and a search of existing reports first).
+### Known issue: no reconnect after a headset power cycle until Chrome restarts
+
+After the headset is switched off and on while Chrome keeps running, `open()` on its serial port times out with `NetworkError: Failed to open serial port` until Chrome is restarted (H-005, H-006). This happens whether the port was open, closed or forgotten when the headset powered off, and choosing the headset again does not help. The page completes every cleanup the Web Serial API offers (H-005 shows no cleanup error), so the stale state is inside the browser process or the macOS Bluetooth state it holds. No page API is documented to clear it; a 2022 spec thread reports the same error on reopen without resolution ([WICG/serial#156](https://github.com/WICG/serial/issues/156)). Tested only on macOS with Chrome 154.
+
+Workaround: quit Chrome (⌘Q) and reopen WebMDR. The page shows this after such a failure.
+
+Checks that would sharpen a Chromium bug report (not filed; the owner's decision):
+
+1. While Chrome is stuck, can another macOS program open an RFCOMM channel to the same service? If yes, the fault is Chrome's rather than macOS's or the headset's.
+2. Does the service's SDP-reported RFCOMM channel change across a headset power cycle (H-001 observed channel 9)? A stale cached channel would explain a timeout that clears on browser restart; this is a hypothesis only.
+3. Does the same happen on another platform (Windows, Android Chrome 138+)?
 
 ## Validation vocabulary
 

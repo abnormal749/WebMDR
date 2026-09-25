@@ -20,7 +20,7 @@ A user-operated prototype on macOS + desktop Chrome successfully selected and op
 | Frame codec, session, noise-control flow | Unit tests with fake transport and time (no hardware) |
 | Sony protocol exchange / state read | Captured on XM5 (H-003): init reply, state reads, ACK sequence rule |
 | Setting changes / confirmation | Off / NC / Ambient, levels 3–17 and voice passthrough confirmed by read-back on one XM5 (H-003) |
-| Audio coexistence / reconnect / multipoint | Headset-button changes adopted and power-off handled (H-005). **Known issue:** after the headset powers off during a session, Chrome cannot reopen it until Chrome is restarted ([details](docs/device-matrix.md#open-issue-no-reconnect-after-power-off-until-chrome-restarts)). Audio and multipoint not tested |
+| Audio coexistence / reconnect / multipoint | Headset-button changes adopted and power-off handled (H-005). **Known issue:** after the headset is switched off and on, Chrome on macOS cannot reopen it until Chrome restarts, whatever the page does ([details](docs/device-matrix.md#known-issue-no-reconnect-after-a-headset-power-cycle-until-chrome-restarts)). Audio and multipoint not tested |
 | GitHub Pages deployment | Live at https://abnormal749.github.io/WebMDR/; connect, init, reads and notifications tested from that origin (H-005) |
 
 See the sanitized [hardware evidence record](docs/device-matrix.md). Opening streams proves transport access, not that a Sony command has succeeded.
