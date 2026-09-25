@@ -1,23 +1,25 @@
 # AGENTS.md — WebMDR
 
-## Mission and current task
+## Mission and current state
 
 Build a static browser-only Sony controller. Use TypeScript; keep the DOM separate from protocol code. Do not introduce a backend, native helper, desktop runtime or firmware updater.
 
-Current milestone: **a tested frame codec and a read-only XM5 session**, then one explicitly requested setting change. Do not build a universal-device framework first.
+The application is implemented and deployed: frame codec, session, V2 and V1 noise-control dialects, firmware query, Web Serial transport and a page with an **Advanced** panel. Noise control is hardware-verified on one WH-1000XM5 over V2 (H-003 to H-006). Layout: `src/protocol` (codec, session, dialects, data table), `src/features`, `src/app` (controller), `src/transport`, `src/ui` (the only DOM code); tests in `test/`.
 
-This snapshot contains documentation, not an implemented application. Inspect the actual repository before assuming files or scripts exist. When scaffolding, add test, type-check and build scripts; run them and report their real results.
+Current milestone: **hardware evidence for other models and platforms**. Code for the V1 dialect and other upstream-listed V2 models exists but is untested on hardware; the firmware query (`04 02`) has not been observed on hardware. Add new features only when requested and backed by a reviewed source.
+
+Run `npm run verify` (type-check, tests, build, dist checks; the same as CI) after a change and report its real result. Contributor-facing rules are summarized in [CONTRIBUTING.md](CONTRIBUTING.md); keep the two consistent.
 
 ## Evidence to preserve
 
-- User reported WH-1000XM5, firmware `2.5.1`, macOS + desktop Chrome, 2026-09-25.
-- Discovery and `port.open({ baudRate: 9600 })` passed; streams were available.
-- Service UUID: `956c7b26-d49a-4ba8-b03f-b17d393cb6e2` (`Serial HPC`).
-- No Sony transaction, setting change or Pages deployment has yet been validated in WebMDR.
-- Browser and OS version numbers were not recorded. Do not invent them.
+- H-001: WH-1000XM5, firmware `2.5.1`, macOS + desktop Chrome; service `956c7b26-d49a-4ba8-b03f-b17d393cb6e2` (`Serial HPC`) selected and opened with `baudRate: 9600`.
+- H-003/H-004: init `00 00` → `01 00 03 00 20 16 00 00`; the device ACKs host seq `s` with `1 - s`; every mode, levels 1–20 and voice passthrough confirmed by read-back. Captures are replayed in `test/replay.test.ts`; keep them passing.
+- H-005/H-006 (first seen in H-004), Chrome 154.0.8037.57 (arm64) on macOS: after a headset power cycle, `open()` fails with `NetworkError: Failed to open serial port` until Chrome restarts. The owner has closed this as a known issue; do not retry workarounds without new evidence, and do not file a Chromium bug unless asked.
+- The model cannot be detected: Web Serial exposes no Bluetooth name and no reviewed source has a model-name query. Do not guess it from other replies.
+- The macOS version was never recorded. Do not invent versions or backfill missing fields.
 - Channel `9` was an SDP observation, not a browser configuration constant.
 
-Read [the evidence record](docs/device-matrix.md), [technical review](docs/technical-review.md), and [source inventory](docs/sources.md) before protocol work. The former bad UUID is a documentation/code discrepancy, not a required compatibility fallback.
+Record every new hardware result in [the evidence record](docs/device-matrix.md) as `H-00n`. Read it, the [technical review](docs/technical-review.md) and the [source inventory](docs/sources.md) before protocol work. The former bad UUID is a documentation/code discrepancy, not a required compatibility fallback.
 
 ## Reuse policy
 
