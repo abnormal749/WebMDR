@@ -154,4 +154,4 @@ For each future report, record date, exact model/firmware, OS/browser versions, 
 
 The firmware query (`04 02`) added after H-006 has not yet been observed on hardware.
 
-No other model has been tested in WebMDR. Models that upstream lists are candidates only; they are shown with their evidence in `src/protocol/profiles.ts` and the page's Devices section, not in this matrix, until a hardware report exists. Native upstream support is tracked separately as candidate evidence, not copied into this matrix.
+No other model has been tested in WebMDR. Models that upstream lists are candidates only; they are listed with their evidence in `src/protocol/profiles.ts` and the README, not in this matrix, until a hardware report exists. Native upstream support is tracked separately as candidate evidence, not copied into this matrix.

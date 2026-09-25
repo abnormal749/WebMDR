@@ -1,0 +1,71 @@
+name: Hardware report
+description: Tell us how WebMDR worked with your headphones, OS and browser.
+title: "Hardware report: <model>, <OS>"
+labels: ["hardware report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! Reports like this are how models move from "expected to work" to "tested".
+        The steps are in [docs/hardware-test.md](https://github.com/abnormal749/WebMDR/blob/main/docs/hardware-test.md).
+        Please don't include Bluetooth addresses, device names or serial numbers.
+  - type: input
+    id: model
+    attributes:
+      label: Headphone model
+      description: Exact model, e.g. WH-1000XM5 or WF-1000XM4. The page can't detect it.
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+      description: As shown on the page (Advanced → Firmware), or from the Sony app.
+  - type: input
+    id: platform
+    attributes:
+      label: OS and browser, exact versions
+      description: e.g. macOS 26.1, Chrome 154.0.8037.57 (arm64). Chrome shows its version at chrome://version.
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: WebMDR build and origin
+      description: The build id in the page footer, and whether you used the published site or localhost.
+    validations:
+      required: true
+  - type: dropdown
+    id: protocol
+    attributes:
+      label: Protocol shown under Advanced
+      options:
+        - Sony V2
+        - Sony V1 (legacy)
+        - Not shown / couldn't connect
+    validations:
+      required: true
+  - type: checkboxes
+    id: results
+    attributes:
+      label: What worked
+      description: Tick only what you actually tried and saw work.
+      options:
+        - label: Connect (headphones chosen, port opened)
+        - label: Protocol ready (controls or current mode shown)
+        - label: Current mode shown correctly
+        - label: Changing Noise cancelling / Ambient / Off
+        - label: Changing the ambient level
+        - label: Voice passthrough
+        - label: Headphone-button changes reflected on the page
+        - label: Disconnect and connect again
+  - type: textarea
+    id: notes
+    attributes:
+      label: What didn't work, or anything unusual
+  - type: textarea
+    id: log
+    attributes:
+      label: Protocol log
+      description: Turn on Advanced (any time; the log is kept from the start of the session) and paste the log here. It contains frame bytes, times, the build and the origin only.
+      render: text

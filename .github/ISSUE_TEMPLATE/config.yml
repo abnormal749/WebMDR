@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Hardware test guide
+    url: https://github.com/abnormal749/WebMDR/blob/main/docs/hardware-test.md
+    about: How to test WebMDR with your headphones before filing a hardware report.

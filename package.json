@@ -5,6 +5,15 @@
   "type": "module",
   "description": "Browser-only Sony headphone controller (Web Serial over Bluetooth RFCOMM). Not affiliated with Sony.",
   "license": "MIT",
+  "homepage": "https://abnormal749.github.io/WebMDR/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abnormal749/WebMDR.git"
+  },
+  "bugs": "https://github.com/abnormal749/WebMDR/issues",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",

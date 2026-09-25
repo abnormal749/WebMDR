@@ -1,143 +1,124 @@
-# WebMDR
+<p align="center"><img src="public/icon-180.png" alt="" width="96" height="96"></p>
 
-**Sony headphone controls in your browser.**
+<h1 align="center">WebMDR</h1>
 
-WebMDR is a browser-only controller under development. Its first target is Ambient Sound and noise-control settings on the Sony WH-1000XM5. The intended deployment is a static GitHub Pages site using Web Serial over Bluetooth Classic RFCOMM, without an application backend or native helper.
+<p align="center"><strong>Noise control for Sony headphones, in your browser.</strong><br>
+No app, no account, no server: a static web page that talks to your headphones over Bluetooth.</p>
 
-Independent project; not affiliated with or endorsed by Sony. **WebMDR is a working name**, not a claim of trademark or package-name clearance.
+<p align="center">
+  <a href="https://abnormal749.github.io/WebMDR/"><strong>Open WebMDR</strong></a> ·
+  <a href="#status">Status</a> ·
+  <a href="#known-issues-and-limitations">Known issues</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
 
-## Status — 2026-09-25
+<p align="center">
+  <a href="https://github.com/abnormal749/WebMDR/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/abnormal749/WebMDR/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+</p>
 
-A first implementation exists: frame codec, session, V2 noise-control operations, a Web Serial transport and a minimal UI, covered by unit tests with a fake transport. On one WH-1000XM5, a captured session ([H-003](docs/device-matrix.md)) shows initialization, state reads and every noise-control change confirmed by device read-back. That is one unit; other units, firmware versions and models remain untested.
+Independent project; not affiliated with or endorsed by Sony. "WebMDR" is a working name, not a claim of trademark clearance.
 
-A user-operated prototype on macOS + desktop Chrome successfully selected and opened the WH-1000XM5 control service. Headset firmware was `2.5.1`. Exact browser and macOS versions were not recorded.
+## What it does
 
-| Milestone | Evidence |
-| --- | --- |
-| Filtered service selection | User reported the expected Bluetooth service UUID |
-| RFCOMM open | User reported successful `port.open({ baudRate: 9600 })` |
-| Streams available | User reported both `readable` and `writable` |
-| Frame codec, session, noise-control flow | Unit tests with fake transport and time (no hardware) |
-| Sony protocol exchange / state read | Captured on XM5 (H-003): init reply, state reads, ACK sequence rule |
-| Setting changes / confirmation | Off / NC / Ambient, levels 3–17 and voice passthrough confirmed by read-back on one XM5 (H-003) |
-| Audio coexistence / reconnect / multipoint | Headset-button changes adopted and power-off handled (H-005). **Known issue:** after the headset is switched off and on, Chrome on macOS cannot reopen it until Chrome restarts, whatever the page does ([details](docs/device-matrix.md#known-issue-no-reconnect-after-a-headset-power-cycle-until-chrome-restarts)). Audio and multipoint not tested |
-| GitHub Pages deployment | Live at https://abnormal749.github.io/WebMDR/; connect, init, reads and notifications tested from that origin (H-005) |
+- Switch between **Noise cancelling**, **Ambient sound** and **Off**.
+- Set the **Ambient level** (live while you drag) and **Voice passthrough**.
+- Follow changes you make with the headphone buttons.
+- Show the firmware version the headphones report.
 
-See the sanitized [hardware evidence record](docs/device-matrix.md). Opening streams proves transport access, not that a Sony command has succeeded.
+Every change is confirmed by reading the setting back from the headphones. If that can't be confirmed, the page says so instead of pretending it worked.
 
-## Transport
+## Use it
 
-```text
-Static HTTPS page → browser Web Serial → Bluetooth RFCOMM → Sony control service
-```
+1. Pair the headphones with your computer in the system Bluetooth settings.
+2. Open **https://abnormal749.github.io/WebMDR/** in desktop **Chrome**. Other Chromium browsers such as Edge may work but are untested.
+3. Click **Connect** and pick your headphones.
 
-Use **both** `filters` and `allowedBluetoothServiceClassIds` when requesting the custom service. Permission must be requested from a user action. [Browser references](docs/sources.md#browser-and-hosting).
+Turn on **Advanced** (top right) for connection details, read-only/passive session modes and the protocol log. The log stays in the page: nothing is uploaded or stored.
 
-| Service candidate | UUID | Evidence |
+The page only works while it is open; closing it disconnects.
+
+## Supported headphones
+
+The protocol is chosen from the Bluetooth service the headphones expose, never from their name.
+
+| Protocol | Tested in WebMDR | Expected to work (listed by upstream, untested here) |
 | --- | --- | --- |
-| Sony newer-generation / HPC | `956c7b26-d49a-4ba8-b03f-b17d393cb6e2` | XM5 service selection/open reported; matches upstream code |
-| Sony legacy | `96cc203e-5068-46ad-b32d-e316f5e069ba` | Upstream code only; not yet tested in WebMDR |
+| Sony V2 | **WH-1000XM5** (firmware 2.5.1) | WH-1000XM6, WF-1000XM4, WF-1000XM5, WF-1000XM6, WH-CH720N, ULT WEAR, LinkBuds S, newer WH-1000XM4 units |
+| Sony V1 | none | WH-1000XM3, older WH-1000XM4 units |
 
-The XM5 SDP record called the first service `Serial HPC` and reported RFCOMM channel `9`. **Do not hard-code that channel:** the browser resolves the selected service.
+On V1 headphones the page asks you to enable the untested controls explicitly. If your model isn't in the tested column, a [hardware report](https://github.com/abnormal749/WebMDR/issues/new?template=hardware-report.yml) is the most useful contribution you can make.
 
-Earlier drafts used a different UUID from upstream README prose. The audited `Client/Constants.h` already contains the working UUID above. This is a documentation/code discrepancy, **not evidence of firmware-specific UUID variants**. Do not add the erroneous UUID as a fallback. [Audit](docs/technical-review.md#1-correct-the-evidence).
+## Status
 
-## Browser targets
+*Last updated 2026-09-25.*
 
-Desktop Chrome remains the initial target because that is where the transport test passed. Other desktop platforms require their own device tests.
-
-Chrome's release notes document Bluetooth RFCOMM Web Serial on **Android from Chrome 138**. Android is therefore an experimental candidate, not categorically excluded. No Android hardware validation is claimed here. Safari, Firefox and iOS are outside the initial supported target; detect the actual API rather than assuming support from a browser label. [Sources](docs/sources.md#browser-and-hosting).
-
-Treat these states separately: authorized port, device available, RFCOMM open, protocol ready, and feature state confirmed. `SerialPort.connected`, where available, is not a protocol-readiness indicator.
-
-## First useful release
-
-The initial release should establish a session, read the headset's current noise-control state, switch ANC / Ambient / Off, and adjust the XM5's Ambient level. Focus on Voice follows only when its encoding and interaction with levels are checked.
-
-H-003 measured 45–119 ms from a change to its confirming read-back, so the Ambient level slider now adjusts live while dragging. The controller keeps one change in flight and only the latest pending position; intermediate positions are dropped, never queued.
-
-There is no early requirement for EQ, DSEE, accounts, telemetry, firmware updates, a PWA service worker, or support for every model listed upstream.
-
-## Design
-
-Start with a small TypeScript implementation and a fake transport for tests:
-
-```text
-UI / user intent
-      ↓
-Noise-control state + V2 command encoding
-      ↓
-Session: transactions, ACKs, freshness, disconnects
-      ↓
-Frame codec / streaming parser
-      ↓
-Web Serial transport
-```
-
-These are responsibility boundaries, not a requirement to create a class or framework for each box. A few modules are sufficient. Keep the protocol independent of the DOM so it can be tested without a browser or headset.
-
-Three rules matter most:
-
-- A resolved browser write, a Sony ACK, and a confirmed setting are different outcomes.
-- Allow one application transaction at a time, but let protocol ACKs pass independently through a serialized byte writer.
-- Noise mode, Ambient level and voice focus form one coherent state. Preserve fields the user did not change.
-
-The [technical review](docs/technical-review.md) defines freshness, timeout and parser rules. The [agent instructions](AGENTS.md) describe how to implement them.
-
-## Expanding to other Sony devices
-
-Build the working XM5 path first. Next, validate another available V2 device; then add a V1 device to test the abstraction. A native application's compatibility table is useful evidence, not a WebMDR support list.
-
-Use a small profile table with explicit provenance, per-feature read/write status, inquiry subtype and value range. Distinguish `unknown`, `unsupported` and `supported`; a timeout means the answer is unknown. Do not infer every writable feature from one successful query.
-
-Web Serial's public port information has no Bluetooth name, MAC address or model field. Do not port a native name-based detector unchanged. Use a reviewed identification exchange where available; an explicit model selection may serve as an initial hint, not proof. Never key device state by service UUID alone: multiple devices can share it. [Browser interface](docs/sources.md#browser-and-hosting).
-
-**Current implementation.** The service UUID selects the protocol *dialect* (which bytes to send), exactly as upstream's macOS client does: the legacy service means V1, the newer service means V2. It identifies no device and keys no stored state. Both dialects implement noise control from upstream source ([`src/protocol/v2.ts`](src/protocol/v2.ts), [`src/protocol/v1.ts`](src/protocol/v1.ts)); controls enable only after a strictly validated state reply, so an incompatible device fails without any setter being sent. The models upstream lists for each dialect are shown on the page with their evidence ([`src/protocol/profiles.ts`](src/protocol/profiles.ts)):
-
-| Dialect | Tested in WebMDR | Listed upstream, untested in WebMDR |
+| Milestone | State | Evidence |
 | --- | --- | --- |
-| V2 (`956c7b26…`) | WH-1000XM5 (H-003 to H-006) | WH-1000XM6, WF-1000XM4, WF-1000XM5, WF-1000XM6, WH-CH720N, ULT WEAR, LinkBuds S, newer WH-1000XM4 units |
-| V1 (`96cc203e…`) | none | WH-1000XM3, WH-1000XM4 |
+| Frame codec, session, noise-control logic | Done | Unit tests with a fake transport and fake time |
+| Connect, initialize, read state | Done on XM5 | [H-003](docs/device-matrix.md#h-003--wh-1000xm5-noise-control-session-capture), replayed in CI |
+| Change settings, confirmed by read-back | Done on XM5 | NC / Ambient / Off, levels 1–20, voice passthrough ([H-003, H-004](docs/device-matrix.md)) |
+| Adopt headphone-button changes; handle power-off | Done on XM5 | [H-005](docs/device-matrix.md#h-005--wh-1000xm5-from-the-deployed-site-button-changes-power-off) |
+| Published site | Done | Tested from the GitHub Pages origin (H-005, H-006) |
+| V1 protocol and other V2 models | Code done | **Needs hardware reports** |
+| Firmware version display | Code done | Not yet observed on hardware |
 
-A report for another model belongs in the [evidence record](docs/device-matrix.md) with model, firmware and the log.
+Hardware results are recorded in the [evidence record](docs/device-matrix.md). Unit tests are never counted as hardware validation.
 
-The page shows the firmware version the headset reports (`04 02`, present in both upstream dialects) but not the model: neither Sony Device Center nor Gadgetbridge has a reviewed model-name query, and Web Serial hides the Bluetooth name. Controls work by default where noise-control writes are hardware-verified (V2); on V1 the user must enable them explicitly. Connection details, session modes and the protocol log sit behind the page's **Advanced** switch.
+## Known issues and limitations
 
-## Reuse and licensing
+- **Reconnecting after the headphones are switched off and on needs a Chrome restart** (macOS, Chrome 154). Opening the port fails with `NetworkError: Failed to open serial port` until Chrome is quit and reopened, whatever the page does: disconnecting first, forgetting the device and choosing it again all fail the same way. The stale state is inside the browser or the macOS Bluetooth stack, and no web API can clear it. **Workaround:** quit Chrome (⌘Q) and reopen the page. [Details and open questions](docs/device-matrix.md#known-issue-no-reconnect-after-a-headset-power-cycle-until-chrome-restarts).
+- **The model can't be detected.** Web Serial hides the Bluetooth name, and no reviewed Sony command returns the model, so the page shows the protocol and firmware instead.
+- **Only one headset model has been tested.** Some V2 models may use a different noise-control code; on those, the page stops at "not ready" without changing anything.
+- **Browsers:** desktop Chrome on macOS is tested. Windows, Linux and Android Chrome 138+ have the API but are untested. Safari and Firefox have no Web Serial.
+- **Not tested:** audio playback during a session, multipoint connections, sleep.
+- **No background control:** there is no native helper, and the page can't act after it is closed.
 
-Create a separate web repository rather than inheriting the whole desktop application. Reference Sony Device Center at the audited commit:
+## Contributing
 
-```text
-dea38969b501a4a167f330dff104414531e80eae
-```
-
-Selectively adapt framing, command layouts and useful tests. Independently review session scheduling, error handling and capability inference; this audit identified reasons not to translate those mechanically.
-
-Sony Device Center carries an MIT license. Preserve required notices for reused material, including in the deployed distribution. Gadgetbridge identifies its code and documentation as AGPLv3: do not assume its source can be translated into an MIT-only project without considering those terms. Record exact file provenance before importing code. [Source inventory](docs/sources.md).
-
-Adapted Sony Device Center material is listed file by file in the [reuse manifest](docs/reuse-manifest.md); its MIT notice ships in `THIRD_PARTY_NOTICES.txt`. WebMDR itself is released under the [MIT License](LICENSE).
-
-## Development milestones
-
-| Step | Exit criterion | Status |
-| --- | --- | --- |
-| Codec + transport lifecycle | Independent byte fixtures pass; open/close/reopen works | Done (H-003, H-005); reopen after a headset power cycle is a known Chrome issue |
-| Read-only Sony session | Source-backed initialization and current-state query receive valid, fresh replies | Done on XM5 (H-003) |
-| One setting change | An explicitly requested change is confirmed by subsequent device state | Done on XM5 (H-003, H-004) |
-| Minimal UI | Controls preserve sibling fields and remain truthful on timeout/disconnect | Done (H-003 to H-006; timeout behaviour unit-tested only) |
-| Pages release | The same tested build works from its deployed HTTPS origin | Done (H-005, H-006) |
-| Additional devices | Model/firmware/feature evidence is added to the matrix | Code for V2 and V1 dialects in place; **needs hardware reports** for any model other than the XM5 |
-
-A short passive RX observation is a diagnostic aid, not a prerequisite that must produce data. The audited V2 implementation initiates communication from the host.
+Contributions are welcome, especially **hardware reports for models other than the WH-1000XM5**. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the rules protocol code follows, and how to test with real headphones.
 
 ```sh
 npm ci
-npm run dev        # local development server
-npm run verify     # type-check, unit tests, production build, dist checks (same as CI)
+npm run dev       # local server at http://localhost:5173
+npm run verify    # type-check, tests, production build, dist checks (same as CI)
 ```
 
-## Deployment and privacy
+## How it works
 
-The build base defaults to `/WebMDR/`, matching this repository's project site; set `WEBMDR_BASE=/` for a user site or custom-domain root. `npm run check:dist` verifies the base, CSP and notices. Deployment runs only through the manually triggered Pages workflow. GitHub Pages supports HTTPS. Test the deployed origin separately from localhost. [Deployment references](docs/sources.md#browser-and-hosting).
+```text
+Static HTTPS page → Web Serial → Bluetooth RFCOMM → Sony control service
+```
 
-Bundle application dependencies rather than loading arbitrary runtime scripts. Keep protocol data local. Diagnostics must be opt-in and reviewed for personal identifiers before export. A browser page is not an always-running native controller; do not promise control after it is closed.
+```text
+src/ui/          page and DOM (the only code that touches the DOM)
+src/app/         controller: connection phases, one in-flight change, confirmation
+src/features/    noise-control state, merging edits
+src/protocol/    frame codec, session (ACKs, sequencing, timeouts), V1/V2 layouts, profiles
+src/transport/   Web Serial port selection, open/close
+test/            unit tests, fake transport, captured sessions replayed in CI
+```
+
+A browser write, a protocol ACK and a confirmed setting are treated as three different outcomes. The session runs one transaction at a time and lets ACKs bypass the queue. An ambiguous timeout is reported as "unknown" and never retried blindly. The [technical review](docs/technical-review.md) explains why.
+
+## Documentation
+
+| Document | Contents |
+| --- | --- |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, workflow, pull-request checklist |
+| [AGENTS.md](AGENTS.md) | Protocol and architecture contract (for humans and coding agents) |
+| [docs/hardware-test.md](docs/hardware-test.md) | Step-by-step test with real headphones |
+| [docs/device-matrix.md](docs/device-matrix.md) | Hardware evidence records H-001 to H-006 |
+| [docs/technical-review.md](docs/technical-review.md) | Frame format, session design, reasons for each rule |
+| [docs/sources.md](docs/sources.md) | Sources reviewed and what each supports |
+| [docs/reuse-manifest.md](docs/reuse-manifest.md) | Every file adapted from third-party code |
+
+## Privacy
+
+The page has no backend, analytics or telemetry, and loads no third-party scripts at run time; a strict content-security policy is applied to the build. Protocol data stays in the page. The protocol log is kept in memory only and shown only under **Advanced**.
+
+## License and credits
+
+WebMDR is released under the [MIT License](LICENSE).
+
+The frame format and command layouts are adapted from [Sony Device Center](https://github.com/marconvcm/sony-device-center) (MIT) at commit `dea38969b501a4a167f330dff104414531e80eae`. Its notice ships in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and in the deployed site, and every adapted file is listed in the [reuse manifest](docs/reuse-manifest.md). No Gadgetbridge (AGPLv3) code is used; it was read for protocol facts only.
