@@ -11,66 +11,93 @@
   </head>
   <body>
     <main>
-      <header>
-        <h1>WebMDR</h1>
-        <p class="sub">Sony headphone noise control over Web Serial. Tested on a WH-1000XM5; other models are untested. Experimental; not affiliated with or endorsed by Sony.</p>
+      <header class="top">
+        <div class="brand">
+          <img src="/icon-180.png" alt="" width="40" height="40" />
+          <div>
+            <h1>WebMDR</h1>
+            <p class="tagline">Noise control for Sony headphones, in your browser</p>
+          </div>
+        </div>
+        <label class="switch" title="Show connection details and the protocol log">
+          <input autocomplete="off" type="checkbox" id="advanced" role="switch" />
+          <span class="track" aria-hidden="true"></span>
+          <span>Advanced</span>
+        </label>
       </header>
 
-      <section aria-labelledby="conn-h">
-        <h2 id="conn-h">Connection</h2>
-        <fieldset id="mode">
-          <legend>Session mode</legend>
-          <label><input autocomplete="off" type="radio" name="mode" value="passive" /> Passive — listen only, sends nothing</label>
-          <label><input autocomplete="off" type="radio" name="mode" value="read-only" checked /> Read-only — initialization and state reads</label>
-          <label><input autocomplete="off" type="radio" name="mode" value="control" /> Control — allows explicit setting changes</label>
-        </fieldset>
-        <label class="optin" id="optin-row" hidden>
-          <input autocomplete="off" type="checkbox" id="optin" />
-          I am running an opted-in hardware test. Setting changes are experimental: confirmed only on one WH-1000XM5 (Sony V2); other models and the V1 protocol are untested.
-        </label>
-        <div class="buttons">
-          <button id="choose" type="button">Choose headset…</button>
-          <button id="connect" type="button" disabled>Connect</button>
-          <button id="disconnect" type="button" disabled>Disconnect</button>
-          <button id="refresh" type="button" disabled>Read state</button>
-          <button id="forget" type="button" disabled title="Revoke this site's permission for the headset and release the port">Forget headset</button>
+      <p id="unsupported" class="notice bad" hidden>
+        This browser can't connect to Bluetooth headphones. Use Chrome or Edge on a desktop computer.
+      </p>
+
+      <section class="card" aria-labelledby="headset-name">
+        <div class="headset">
+          <div>
+            <h2 id="headset-name">No headphones connected</h2>
+            <p id="headset-meta" class="muted">Turn your headphones on and make sure they're paired with this computer.</p>
+          </div>
+          <div class="actions">
+            <button id="connect" type="button" class="primary">Connect</button>
+            <button id="disconnect" type="button" hidden>Disconnect</button>
+          </div>
         </div>
-        <dl class="stages" id="stages"></dl>
-        <p id="detail" role="status" aria-live="polite"></p>
+        <button id="choose-other" type="button" class="link" hidden>Use different headphones</button>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
       </section>
 
-      <section aria-labelledby="nc-h">
-        <h2 id="nc-h">Noise control</h2>
-        <p id="device-state" class="state">No device state.</p>
-        <fieldset id="nc-mode" disabled>
-          <legend>Mode</legend>
-          <label><input autocomplete="off" type="radio" name="nc" value="off" /> Off</label>
-          <label><input autocomplete="off" type="radio" name="nc" value="noise-cancelling" /> Noise cancelling</label>
-          <label><input autocomplete="off" type="radio" name="nc" value="ambient" /> Ambient sound</label>
+      <section id="controls" class="card" aria-label="Noise control" hidden>
+        <div id="optin-notice" class="notice warn" hidden>
+          <p>These headphones use an older Sony protocol that hasn't been tested with WebMDR yet. Changes might not work as expected.</p>
+          <button id="optin-enable" type="button">Enable controls anyway</button>
+        </div>
+
+        <fieldset id="nc-mode" class="segmented">
+          <legend>Noise control</legend>
+          <label><input autocomplete="off" type="radio" name="nc" value="noise-cancelling" /><span>Noise cancelling</span></label>
+          <label><input autocomplete="off" type="radio" name="nc" value="ambient" /><span>Ambient sound</span></label>
+          <label><input autocomplete="off" type="radio" name="nc" value="off" /><span>Off</span></label>
         </fieldset>
-        <fieldset id="nc-ambient" disabled>
-          <legend>Ambient sound</legend>
-          <label for="level">Level <output id="level-out" for="level"></output></label>
+
+        <fieldset id="nc-ambient" class="ambient">
+          <legend class="visually-hidden">Ambient sound</legend>
+          <label for="level" class="slider-label"><span>Ambient level</span><output id="level-out" for="level"></output></label>
           <input autocomplete="off" id="level" type="range" min="1" max="20" step="1" />
-          <label><input autocomplete="off" type="checkbox" id="voice" /> Voice passthrough (focus on voice)</label>
+          <label class="toggle">
+            <span>
+              <span class="toggle-title">Voice passthrough</span>
+              <span class="muted">Let voices and announcements through</span>
+            </span>
+            <input autocomplete="off" type="checkbox" id="voice" role="switch" />
+            <span class="track" aria-hidden="true"></span>
+          </label>
         </fieldset>
-        <p id="change" class="change" aria-live="polite"></p>
+
+        <p id="change" class="change muted" aria-live="polite"></p>
       </section>
 
-      <section aria-labelledby="dev-h">
-        <h2 id="dev-h">Devices</h2>
-        <p class="sub">The protocol is chosen from the Bluetooth service the headset exposes; the model itself cannot be detected. Models other than the tested one are listed from Sony Device Center's table and have not been tried in WebMDR.</p>
-        <div id="devices"></div>
-      </section>
-
-      <section aria-labelledby="diag-h">
-        <h2 id="diag-h">Diagnostics</h2>
-        <label><input autocomplete="off" type="checkbox" id="diag" /> Record protocol log in this page (frame bytes only; nothing is uploaded)</label>
-        <pre id="log" hidden></pre>
+      <section id="advanced-panel" class="card advanced" aria-labelledby="adv-h" hidden>
+        <h2 id="adv-h">Advanced</h2>
+        <fieldset id="mode">
+          <legend>Session mode <span class="muted">(applies to the next connection)</span></legend>
+          <label><input autocomplete="off" type="radio" name="mode" value="control" checked /> Control — read and change settings</label>
+          <label><input autocomplete="off" type="radio" name="mode" value="read-only" /> Read-only — initialization and state reads</label>
+          <label><input autocomplete="off" type="radio" name="mode" value="passive" /> Passive — listen only, sends nothing</label>
+        </fieldset>
+        <dl class="stages" id="stages"></dl>
+        <p id="evidence" class="muted"></p>
+        <p id="device-state" class="muted"></p>
+        <p id="change-detail" class="muted"></p>
+        <div class="buttons">
+          <button id="refresh" type="button" disabled>Read state</button>
+          <button id="forget" type="button" disabled title="Revoke this site's permission for the headphones">Forget headphones</button>
+        </div>
+        <h3>Protocol log <span class="muted">(this page only: frame bytes, UTC times; never stored or uploaded)</span></h3>
+        <pre id="log"></pre>
       </section>
 
       <footer>
-        <p>WebMDR is an independent project. Includes material adapted from Sony Device Center (MIT) — <a href="THIRD_PARTY_NOTICES.txt">third-party notices</a>. Build <code id="build"></code>.</p>
+        Independent project; not affiliated with or endorsed by Sony. Includes material adapted from Sony Device Center (MIT):
+        <a href="THIRD_PARTY_NOTICES.txt">notices</a>. Build <code id="build"></code>.
       </footer>
     </main>
     <script type="module" src="/src/ui/main.ts"></script>

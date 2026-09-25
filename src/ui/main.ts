@@ -3,13 +3,13 @@
 import { Controller, type ChangeResult, type ControllerState } from '../app/controller';
 import type { NoiseMode, NoiseState } from '../features/noiseControl';
 import { dialectFor } from '../protocol/dialect';
-import { PROFILES, profileForService, type Evidence, type Profile } from '../protocol/profiles';
+import { PROFILES, profileForService, type Profile } from '../protocol/profiles';
 import type { SessionMode } from '../protocol/session';
 import {
   authorizedServicePorts,
+  describe,
   getSerial,
   openSerialChannel,
-  describe,
   requestServicePort,
   type SerialPortLike,
 } from '../transport/webSerial';
@@ -19,39 +19,70 @@ declare const __WEBMDR_BUILD__: string;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const ui = {
-  modeSet: $('mode'),
-  optinRow: $('optin-row'),
-  optin: $<HTMLInputElement>('optin'),
-  choose: $<HTMLButtonElement>('choose'),
+  advanced: $<HTMLInputElement>('advanced'),
+  unsupported: $('unsupported'),
+  headsetName: $('headset-name'),
+  headsetMeta: $('headset-meta'),
   connect: $<HTMLButtonElement>('connect'),
   disconnect: $<HTMLButtonElement>('disconnect'),
-  refresh: $<HTMLButtonElement>('refresh'),
-  forget: $<HTMLButtonElement>('forget'),
-  stages: $('stages'),
-  detail: $('detail'),
-  deviceState: $('device-state'),
+  chooseOther: $<HTMLButtonElement>('choose-other'),
+  status: $('status'),
+  controls: $('controls'),
+  optinNotice: $('optin-notice'),
+  optinEnable: $<HTMLButtonElement>('optin-enable'),
   ncMode: $<HTMLFieldSetElement>('nc-mode'),
   ncAmbient: $<HTMLFieldSetElement>('nc-ambient'),
   level: $<HTMLInputElement>('level'),
   levelOut: $<HTMLOutputElement>('level-out'),
   voice: $<HTMLInputElement>('voice'),
   change: $('change'),
-  diag: $<HTMLInputElement>('diag'),
+  advancedPanel: $('advanced-panel'),
+  modeSet: $<HTMLFieldSetElement>('mode'),
+  stages: $('stages'),
+  evidence: $('evidence'),
+  deviceState: $('device-state'),
+  changeDetail: $('change-detail'),
+  refresh: $<HTMLButtonElement>('refresh'),
+  forget: $<HTMLButtonElement>('forget'),
   log: $<HTMLPreElement>('log'),
   build: $('build'),
-  devices: $('devices'),
 };
 
+// ---- advanced switch (a per-browser convenience; storage may be unavailable) ----
+
+const ADVANCED_KEY = 'webmdr.advanced';
+function loadAdvanced(): boolean {
+  try {
+    return localStorage.getItem(ADVANCED_KEY) === '1';
+  } catch {
+    return false; // storage blocked: fall back to the simple view
+  }
+}
+function saveAdvanced(on: boolean): void {
+  try {
+    localStorage.setItem(ADVANCED_KEY, on ? '1' : '0');
+  } catch {
+    // storage blocked: the switch still works for this page view
+  }
+}
+
+// ---- diagnostics log ----
+// Kept in this page's memory only (bounded, frame bytes, never stored or sent), so that
+// turning Advanced on after a problem still shows what happened. Displayed only in Advanced.
+
 const MAX_LOG_LINES = 400;
+const LOG_HEADER = `WebMDR build ${__WEBMDR_BUILD__} at ${location.origin}; times are UTC`;
 const logLines: string[] = [];
-const serial = getSerial();
 function diag(line: string): void {
-  if (!ui.diag.checked) return;
-  if (logLines.length === 0) logLines.push(`WebMDR build ${__WEBMDR_BUILD__} at ${location.origin}; times are UTC`);
   logLines.push(`${new Date().toISOString().slice(11, 23)}Z ${line}`);
   if (logLines.length > MAX_LOG_LINES) logLines.splice(0, logLines.length - MAX_LOG_LINES);
-  ui.log.textContent = logLines.join('\n');
+  if (ui.advanced.checked) showLog();
 }
+function showLog(): void {
+  ui.log.textContent = logLines.length ? [LOG_HEADER, ...logLines].join('\n') : '';
+}
+
+const serial = getSerial();
 const controller = new Controller({ onLog: diag });
 const SERVICES = PROFILES.map((p) => p.serviceUuid);
 const profileOf = (p: SerialPortLike | undefined): Profile | undefined => profileForService(p?.getInfo().bluetoothServiceClassId);
@@ -59,44 +90,48 @@ const profileOf = (p: SerialPortLike | undefined): Profile | undefined => profil
 let port: SerialPortLike | undefined;
 let portOpen = false;
 let busy = false;
+/** Plain-language result of the last button action; kept until the next action. */
+let actionMessage: { text: string; bad: boolean } | undefined;
+let openNetworkError = false;
 
+// H-005/H-006: after the headphones have been switched off and on, Chrome on macOS
+// cannot reopen the port until Chrome restarts, whatever the page did beforehand.
+const REOPEN_HINT =
+  'Known issue: after the headphones have been switched off and on, Chrome on macOS cannot reconnect ' +
+  'until Chrome restarts. Quit Chrome (⌘Q) and open WebMDR again.';
 
 function selectedMode(): SessionMode {
-  const value = (document.querySelector('input[name="mode"]:checked') as HTMLInputElement).value;
-  // Control requires the explicit opt-in; otherwise fall back to read-only.
-  if (value === 'control' && !ui.optin.checked) return 'read-only';
-  return value as SessionMode;
+  return ((ui.modeSet.querySelector('input:checked') as HTMLInputElement | null)?.value ?? 'control') as SessionMode;
 }
-
-/** Error from the last user action; shown until the next action so render() cannot hide it. */
-let actionError: string | undefined;
 
 async function withBusy(task: () => Promise<void>): Promise<void> {
   busy = true;
-  actionError = undefined;
+  actionMessage = undefined;
   render(controller.state);
   try {
     await task();
   } catch (error) {
-    actionError = describe(error) + (openNetworkError ? REOPEN_HINT : '');
+    actionMessage = explain(error);
   } finally {
     busy = false;
     render(controller.state);
   }
 }
 
-// H-005/H-006: after the headset has been switched off and on, Chrome 154 on macOS
-// cannot reopen the port until Chrome restarts, whatever the page did beforehand
-// (close, forget, re-select). See docs/device-matrix.md.
-const REOPEN_HINT =
-  ' Known issue: after the headset has been switched off and on, Chrome on macOS cannot reopen it ' +
-  'until Chrome restarts. Quit Chrome (⌘Q) and reopen WebMDR.';
-let openNetworkError = false;
+/** Short, non-technical messages; the exact error stays in the Advanced log. */
+function explain(error: unknown): { text: string; bad: boolean } | undefined {
+  diag(`action failed: ${describe(error)}`);
+  const name = error instanceof Error ? error.name : '';
+  if (name === 'NotFoundError') return undefined; // chooser closed without picking
+  if (openNetworkError) return { text: `Couldn't connect to the headphones. ${REOPEN_HINT}`, bad: true };
+  if (name === 'InvalidStateError') return { text: 'The headphones are already connected in another tab or window.', bad: true };
+  return { text: `Something went wrong: ${describe(error)}`, bad: true };
+}
 
 async function connect(): Promise<void> {
   if (!port) return;
   const profile = profileOf(port);
-  if (!profile) throw new Error('The selected port exposes no Sony service that WebMDR knows.');
+  if (!profile) throw new Error('These headphones do not offer a Sony control service that WebMDR knows.');
   openNetworkError = false;
   diag(`opening port (device available: ${port.connected ?? 'not reported'})`);
   let channel;
@@ -118,16 +153,17 @@ async function connect(): Promise<void> {
   }
 }
 
-ui.choose.addEventListener('click', () =>
-  withBusy(async () => {
-    if (!serial) return;
-    port = await requestServicePort(serial, SERVICES); // user gesture
-    await connect();
-  }),
-);
-ui.connect.addEventListener('click', () => withBusy(connect));
+async function choose(): Promise<void> {
+  if (!serial) return;
+  port = await requestServicePort(serial, SERVICES); // user gesture
+  await connect();
+}
+
+ui.connect.addEventListener('click', () => withBusy(() => (port ? connect() : choose())));
+ui.chooseOther.addEventListener('click', () => withBusy(choose));
 ui.disconnect.addEventListener('click', () => withBusy(() => controller.disconnect()));
 ui.refresh.addEventListener('click', () => void controller.refresh());
+ui.optinEnable.addEventListener('click', () => controller.allowUnverifiedWrites(true));
 ui.forget.addEventListener('click', () =>
   withBusy(async () => {
     if (!port?.forget) return;
@@ -138,22 +174,17 @@ ui.forget.addEventListener('click', () =>
     diag('port forgotten');
   }),
 );
-ui.modeSet.addEventListener('change', () => render(controller.state));
-ui.optin.addEventListener('change', () => render(controller.state));
-ui.diag.addEventListener('change', () => {
-  ui.log.hidden = !ui.diag.checked;
-  if (!ui.diag.checked) {
-    logLines.length = 0;
-    ui.log.textContent = '';
-  }
+ui.advanced.addEventListener('change', () => {
+  saveAdvanced(ui.advanced.checked);
+  if (ui.advanced.checked) showLog();
+  render(controller.state);
 });
 
 ui.ncMode.addEventListener('change', (e) => controller.commit({ mode: (e.target as HTMLInputElement).value as NoiseMode }));
 ui.voice.addEventListener('change', () => controller.commit({ voice: ui.voice.checked }));
 
-// Live level adjustment. H-003 measured 45–119 ms per confirmed change; the
-// controller keeps one change in flight plus only the latest pending level, so
-// dragging never builds a backlog of obsolete positions.
+// Live level adjustment (H-003: 45–119 ms per confirmed change). The controller keeps
+// one change in flight plus only the latest pending level, so dragging never builds a backlog.
 let lastLevelCommit: number | undefined; // within the current interaction
 let draggingLevel = false;
 function commitLevel(): void {
@@ -194,55 +225,143 @@ for (const type of ['connect', 'disconnect'] as const) {
 
 // ---- rendering ----
 
+function render(state: ControllerState): void {
+  const advanced = ui.advanced.checked;
+  const connected = state.phase !== 'idle';
+  const profile = state.profile ?? profileOf(port);
+
+  ui.unsupported.hidden = serial !== undefined;
+  ui.advancedPanel.hidden = !advanced;
+
+  // Headset card
+  ui.headsetName.textContent = connected ? 'Sony headphones' : port ? 'Sony headphones (not connected)' : 'No headphones connected';
+  ui.headsetMeta.textContent = headsetMeta(state, connected);
+  ui.connect.hidden = connected;
+  ui.connect.disabled = !serial || busy;
+  ui.connect.textContent = busy && !connected ? 'Connecting…' : port ? 'Reconnect' : 'Connect';
+  ui.disconnect.hidden = !connected;
+  ui.disconnect.disabled = busy || state.phase === 'closing';
+  ui.chooseOther.hidden = connected || !port || !serial;
+  const status = statusMessage(state);
+  ui.status.textContent = status?.text ?? '';
+  ui.status.classList.toggle('bad', status?.bad === true);
+
+  renderControls(state);
+  if (advanced) renderAdvanced(state, profile);
+  ui.build.textContent = __WEBMDR_BUILD__;
+}
+
+function headsetMeta(state: ControllerState, connected: boolean): string {
+  if (!connected) return port ? '' : "Turn your headphones on and make sure they're paired with this computer.";
+  const fw = state.firmware;
+  return fw?.status === 'known' ? `Firmware ${fw.version}` : '';
+}
+
+function statusMessage(state: ControllerState): { text: string; bad: boolean } | undefined {
+  if (actionMessage) return actionMessage;
+  switch (state.phase) {
+    case 'initializing':
+      return { text: 'Connecting…', bad: false };
+    case 'failed':
+      return { text: "Couldn't communicate with the headphones. Disconnect and try again.", bad: true };
+    case 'observing':
+      return { text: 'Listening only (passive mode).', bad: false };
+    case 'idle':
+      return state.detail.includes('device has been lost') ? { text: 'The headphones disconnected.', bad: false } : undefined;
+    default:
+      return undefined;
+  }
+}
+
+function renderControls(state: ControllerState): void {
+  const { device, inFlight, queued, last } = state.noise;
+  const view = device ? controller.view(device.raw) : undefined;
+  ui.controls.hidden = !view;
+  if (!view) return;
+
+  const editable = controller.canChange;
+  const range = state.profile?.noiseControl.levelWrite;
+  if (range) {
+    ui.level.min = String(range.min);
+    ui.level.max = String(range.max);
+  }
+  ui.optinNotice.hidden = !(state.phase === 'ready' && state.mode === 'control' && controller.needsOptIn);
+
+  // Show the device's values unless the user has an edit in progress.
+  if (!inFlight && !queued) {
+    for (const r of ui.ncMode.querySelectorAll<HTMLInputElement>('input')) r.checked = r.value === view.mode;
+    // Never move the thumb under the user's pointer while dragging.
+    if (!draggingLevel) ui.level.value = String(view.level);
+    ui.voice.checked = view.voice;
+  }
+  // A level outside the settable range (e.g. V1 reports 0 outside ambient) is not a slider position.
+  ui.levelOut.value = range && view.level >= range.min && view.level <= range.max ? ui.level.value : '—';
+  ui.ncMode.disabled = !editable;
+  ui.ncAmbient.hidden = view.mode !== 'ambient';
+  ui.ncAmbient.disabled = !editable;
+
+  ui.change.textContent = inFlight || queued ? 'Saving…' : last ? simpleResult(last) : '';
+  ui.change.classList.toggle('bad', last?.kind === 'unknown' || last?.kind === 'mismatch');
+}
+
+function simpleResult(r: ChangeResult): string {
+  switch (r.kind) {
+    case 'confirmed': return 'Saved.';
+    case 'mismatch': return 'The headphones kept a different setting.';
+    case 'unknown': return "Couldn't confirm the change. Disconnect and reconnect.";
+    case 'not-sent': return `Not changed: ${r.detail}.`;
+  }
+}
+
+// ---- advanced panel ----
+
 const yes = (text: string) => `<span class="yes">${text}</span>`;
 const no = (text: string) => `<span class="no">${text}</span>`;
 
-function render(state: ControllerState): void {
+function renderAdvanced(state: ControllerState, profile: Profile | undefined): void {
   const connected = state.phase !== 'idle';
-  ui.optinRow.hidden = (document.querySelector('input[name="mode"]:checked') as HTMLInputElement).value !== 'control';
   for (const input of ui.modeSet.querySelectorAll('input')) input.disabled = connected;
-  ui.optin.disabled = connected;
-  ui.choose.disabled = !serial || busy || connected;
-  ui.connect.disabled = !serial || busy || connected || !port;
-  ui.disconnect.disabled = busy || !connected || state.phase === 'closing';
   ui.refresh.disabled = state.phase !== 'ready';
   ui.forget.disabled = !port?.forget || busy || connected;
 
   const available = port?.connected;
+  const fw = state.firmware;
   const rows: [string, string][] = [
-    ['Web Serial API', serial ? yes('available') : `<span class="bad">not available in this browser</span>`],
+    ['Web Serial API', serial ? yes('available') : '<span class="bad">not available</span>'],
     ['Port authorized', port ? yes('yes') : no('no')],
     ['Device available', available === undefined ? no('not reported') : available ? yes('yes') : no('no')],
     ['Port open', portOpen ? yes('yes') : no('no')],
-    ['Protocol', profileOf(port) ? escapeHtml(profileOf(port)!.label) : no('—')],
+    ['Protocol', profile ? escapeHtml(`${profile.label} (service ${profile.serviceUuid})`) : no('—')],
     ['Session mode', state.mode ?? no('—')],
     ['Protocol ready', protocolLabel(state)],
+    ['Firmware', !fw ? no('—') : fw.status === 'known' ? escapeHtml(fw.version) : fw.status === 'reading' ? no('reading…') : no(`unavailable (${escapeHtml(fw.reason)})`)],
+    ['Status', escapeHtml(state.detail)],
   ];
   ui.stages.innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
-  ui.detail.textContent = actionError ?? state.detail;
-  ui.detail.classList.toggle('bad', actionError !== undefined);
 
-  renderNoise(state);
-}
+  if (profile) {
+    const tested = profile.models.filter((m) => m.evidence === 'hardware-verified').map((m) => m.model);
+    ui.evidence.textContent =
+      `Noise control on ${profile.label}: ${profile.noiseControl.write === 'hardware-verified' ? 'tested' : 'untested'} in WebMDR` +
+      (tested.length ? ` (on ${tested.join(', ')}).` : '.') +
+      ' The model itself cannot be detected: no reviewed command returns it.';
+  } else {
+    ui.evidence.textContent = '';
+  }
 
-function escapeHtml(text: string): string {
-  return text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-}
-
-const EVIDENCE_LABEL: Record<Evidence, string> = {
-  'hardware-verified': 'tested in WebMDR',
-  'source-reviewed': 'untested (upstream source only)',
-  unknown: 'unknown',
-  unsupported: 'unsupported',
-};
-
-function renderDevices(): void {
-  ui.devices.innerHTML = PROFILES.map((p) => {
-    const rows = p.models
-      .map((m) => `<tr><td>${escapeHtml(m.model)}</td><td class="${m.evidence === 'hardware-verified' ? 'yes' : 'no'}">${EVIDENCE_LABEL[m.evidence]}</td><td>${escapeHtml(m.note)}</td></tr>`)
-      .join('');
-    return `<h3>${escapeHtml(p.label)} <code>${p.serviceUuid}</code></h3><table><thead><tr><th>Model</th><th>Noise control</th><th>Evidence</th></tr></thead><tbody>${rows}</tbody></table>`;
-  }).join('');
+  const { device, inFlight, queued, last } = state.noise;
+  ui.deviceState.textContent = device
+    ? `Device reports: ${describeRaw(device.raw)} (${device.via === 'reply' ? 'read reply' : 'notification'})`
+    : '';
+  const lines: string[] = [];
+  if (inFlight) {
+    lines.push(inFlight.stage === 'awaiting-ack'
+      ? `Sending ${describeRaw(inFlight.target)}; waiting for protocol ACK.`
+      : `ACK received; reading back state to confirm ${describeRaw(inFlight.target)}.`);
+  }
+  if (queued) lines.push('Latest change queued; sent after the current one completes.');
+  if (last) lines.push(detailedResult(last));
+  ui.changeDetail.textContent = lines.join(' ');
 }
 
 function protocolLabel(state: ControllerState): string {
@@ -256,46 +375,6 @@ function protocolLabel(state: ControllerState): string {
   }
 }
 
-function renderNoise(state: ControllerState): void {
-  const { device, inFlight, queued, last } = state.noise;
-  const editable = controller.canChange;
-  const view = device ? controller.view(device.raw) : undefined;
-  const range = state.profile?.noiseControl.levelWrite;
-  if (range) {
-    ui.level.min = String(range.min);
-    ui.level.max = String(range.max);
-  }
-
-  ui.deviceState.textContent = view
-    ? `Device reports: ${describeState(view)} (${device!.via === 'reply' ? 'read reply' : 'notification'})`
-    : 'No device state.';
-
-  // Show the device's values unless the user has an edit in progress.
-  if (view && !inFlight && !queued) {
-    for (const r of ui.ncMode.querySelectorAll<HTMLInputElement>('input')) r.checked = r.value === view.mode;
-    // Never move the thumb under the user's pointer while dragging.
-    if (!draggingLevel) ui.level.value = String(view.level);
-    ui.voice.checked = view.voice;
-  }
-  // A level outside the settable range (e.g. V1 reports 0 outside ambient) is not shown as a
-  // slider position; the thumb's resting place is only a presentation default.
-  ui.levelOut.value = view && range && view.level >= range.min && view.level <= range.max ? ui.level.value : '—';
-  ui.build.textContent = __WEBMDR_BUILD__;
-  ui.ncMode.disabled = !editable;
-  ui.ncAmbient.disabled = !editable || view?.mode !== 'ambient';
-
-  const lines: string[] = [];
-  if (inFlight) {
-    lines.push(inFlight.stage === 'awaiting-ack'
-      ? `Sending ${describeRaw(inFlight.target)} — waiting for protocol ACK`
-      : `ACK received — reading back state to confirm ${describeRaw(inFlight.target)}`);
-  }
-  if (queued) lines.push('Latest change queued; sent after the current one completes.');
-  if (last) lines.push(describeResult(last));
-  if (state.mode === 'control' && !editable && state.phase === 'ready') lines.push('Controls disabled.');
-  ui.change.textContent = lines.join(' ');
-}
-
 function describeState(s: NoiseState): string {
   const name = s.mode === 'off' ? 'Off' : s.mode === 'ambient' ? 'Ambient' : 'Noise cancelling';
   return `${name}, level ${s.level}${s.mode === 'ambient' ? '' : ' (inactive)'}, voice passthrough ${s.voice ? 'on' : 'off'}`;
@@ -306,7 +385,7 @@ function describeRaw(raw: unknown): string {
   return view ? describeState(view) : 'unknown state';
 }
 
-function describeResult(r: ChangeResult): string {
+function detailedResult(r: ChangeResult): string {
   switch (r.kind) {
     case 'confirmed': return `Confirmed by device read-back: ${describeRaw(r.target)}.`;
     case 'mismatch': return `ACK received, but the device now reports ${describeRaw(r.reported)} instead of ${describeRaw(r.target)}.`;
@@ -315,9 +394,13 @@ function describeResult(r: ChangeResult): string {
   }
 }
 
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+}
+
 // ---- startup (after all module-level bindings are initialized) ----
 
-renderDevices();
+ui.advanced.checked = loadAdvanced();
 controller.subscribe((state) => {
   if (state.phase === 'idle') portOpen = false;
   render(state);
@@ -325,7 +408,7 @@ controller.subscribe((state) => {
 
 void (async () => {
   if (!serial) return;
-  // Previously authorized ports are offered for a manual connect, never opened automatically.
+  // Previously authorized headphones are offered for a manual connect, never opened automatically.
   const ports = await authorizedServicePorts(serial, SERVICES);
   if (ports[0] && !port) {
     port = ports[0];

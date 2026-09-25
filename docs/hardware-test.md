@@ -6,22 +6,22 @@ Unit tests use a fake transport and fake time. They do not show that any byte wo
 
 - Record: date, headset model and firmware, OS and browser **exact** versions, WebMDR commit (`git rev-parse HEAD`), origin (`http://localhost:5173` or the Pages URL).
 - `npm ci && npm run dev`, open the printed localhost URL in desktop Chrome.
-- Enable **Diagnostics**. Its first line records the WebMDR build and origin; times are UTC. The log otherwise contains frame bytes only. Review it before sharing; do not add device names, addresses or serial numbers.
+- Turn on **Advanced** (top right). It shows connection details, the firmware version the headset reports, and the protocol log. The log's first line records the WebMDR build and origin; times are UTC; it otherwise contains frame bytes only. Review it before sharing; do not add device names, addresses or serial numbers.
 
 ## Steps and what each result shows
 
 | Step | Pass criterion | Validation stage |
 | --- | --- | --- |
-| 1. Passive, Choose headset, wait ~30 s, Disconnect | Port opens; any RX is logged; **no TX lines** | Service selected / transport opened |
-| 2. Read-only, Connect | Log shows `TX V2 host initialization`, an RX with payload starting `01`, then `TX Read noise-control state` and an RX `67 17 01 …`; page says *Protocol ready* | Protocol identified |
-| 3. Note whether ACK RX frames carry seq `1 - tx seq` | Record the observed ACK sequence values | ACK semantics (currently source-derived only) |
+| 1. Advanced → Passive, Connect, wait ~30 s, Disconnect | Port opens; any RX is logged; **no TX lines** | Service selected / transport opened |
+| 2. Advanced → Read-only, Connect | Log shows the init exchange (V2 only), `TX Read noise-control state` with a valid reply, and `TX Read firmware version`; Advanced shows *Protocol ready* and the firmware | Protocol identified |
+| 3. Note whether ACK RX frames carry seq `1 - tx seq` | Record the observed ACK sequence values | ACK semantics |
 | 4. Change mode with the headset button, then **Read state** | Reported mode matches the headset | Feature read |
 | 5. Disconnect, Connect again | Clean reopen; no setter sent | Lifecycle |
-| 6. Control mode + opt-in, change one setting | Result reads *Confirmed by device read-back* and the headset audibly matches | Feature changed |
-| 7. Turn the headset off during a connected session | Page reports disconnected; controls disabled | Lifecycle |
+| 6. Advanced → Control (the default), change one setting | The page says *Saved.*; Advanced shows *Confirmed by device read-back*; the headset audibly matches | Feature changed |
+| 7. Turn the headset off during a connected session | Page reports disconnected; controls hidden | Lifecycle |
 
 A step that fails or times out is recorded as such with the log excerpt. A timeout is inconclusive, not evidence that a feature is unsupported.
 
 ## Testing another model
 
-Record the exact model name and firmware, and the **Protocol** row the page shows (Sony V2 or Sony V1). Start in Read-only mode: a pass there is "Protocol identified" and "Feature read" for that model. Only then try Control mode. A read failure with a "malformed" message is useful evidence of a different layout; include the log.
+The page cannot detect the model, so write down the exact model name yourself, plus the firmware and the **Protocol** row Advanced shows (Sony V2 or Sony V1). Start in Read-only mode: a pass there is "Protocol identified" and "Feature read" for that model. Only then try Control mode; on V1 the page asks you to enable untested controls explicitly. A read failure with a "malformed" message is useful evidence of a different layout; include the log.

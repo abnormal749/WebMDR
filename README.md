@@ -101,6 +101,8 @@ Web Serial's public port information has no Bluetooth name, MAC address or model
 
 A report for another model belongs in the [evidence record](docs/device-matrix.md) with model, firmware and the log.
 
+The page shows the firmware version the headset reports (`04 02`, present in both upstream dialects) but not the model: neither Sony Device Center nor Gadgetbridge has a reviewed model-name query, and Web Serial hides the Bluetooth name. Controls work by default where noise-control writes are hardware-verified (V2); on V1 the user must enable them explicitly. Connection details, session modes and the protocol log sit behind the page's **Advanced** switch.
+
 ## Reuse and licensing
 
 Create a separate web repository rather than inheriting the whole desktop application. Reference Sony Device Center at the audited commit:
