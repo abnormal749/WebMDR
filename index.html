@@ -13,7 +13,7 @@
     <main>
       <header>
         <h1>WebMDR</h1>
-        <p class="sub">Sony WH-1000XM5 noise control over Web Serial. Experimental; not affiliated with or endorsed by Sony.</p>
+        <p class="sub">Sony headphone noise control over Web Serial. Tested on a WH-1000XM5; other models are untested. Experimental; not affiliated with or endorsed by Sony.</p>
       </header>
 
       <section aria-labelledby="conn-h">
@@ -26,7 +26,7 @@
         </fieldset>
         <label class="optin" id="optin-row" hidden>
           <input autocomplete="off" type="checkbox" id="optin" />
-          I am running an opted-in hardware test. Setting changes are experimental: confirmed on one WH-1000XM5 in testing, not on other units or firmware versions.
+          I am running an opted-in hardware test. Setting changes are experimental: confirmed only on one WH-1000XM5 (Sony V2); other models and the V1 protocol are untested.
         </label>
         <div class="buttons">
           <button id="choose" type="button">Choose headset…</button>
@@ -55,6 +55,12 @@
           <label><input autocomplete="off" type="checkbox" id="voice" /> Voice passthrough (focus on voice)</label>
         </fieldset>
         <p id="change" class="change" aria-live="polite"></p>
+      </section>
+
+      <section aria-labelledby="dev-h">
+        <h2 id="dev-h">Devices</h2>
+        <p class="sub">The protocol is chosen from the Bluetooth service the headset exposes; the model itself cannot be detected. Models other than the tested one are listed from Sony Device Center's table and have not been tried in WebMDR.</p>
+        <div id="devices"></div>
       </section>
 
       <section aria-labelledby="diag-h">

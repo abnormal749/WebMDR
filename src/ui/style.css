@@ -44,3 +44,9 @@ input[type='range'] { width: 100%; }
 .state, .change { font-variant-numeric: tabular-nums; }
 pre { max-height: 20rem; overflow: auto; font-size: 0.8rem; border: 1px solid var(--line); padding: 0.5rem; white-space: pre-wrap; word-break: break-all; }
 #detail.bad { color: var(--bad); }
+h3 { font-size: 0.95rem; margin: 1rem 0 0.4rem; }
+h3 code { font-weight: normal; font-size: 0.8rem; color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th, td { text-align: left; padding: 0.3rem 0.5rem 0.3rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+#devices { overflow-x: auto; }

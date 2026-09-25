@@ -9,6 +9,7 @@
 // ACK status is still recorded separately; a GET completes on its validated reply.
 
 import { encodeFrame, FrameParser, FrameType, type Frame, type ParseError } from './codec';
+import type { Dialect } from './profiles';
 
 /** Minimal byte stream the session owns for one connection. */
 export interface ByteChannel {
@@ -33,7 +34,7 @@ interface OperationInfo {
   purpose: string;
   /** Upstream file/commit or other evidence for the byte layout. */
   source: string;
-  dialect: 'sony-v2';
+  dialect: Dialect;
   payload: Uint8Array;
 }
 

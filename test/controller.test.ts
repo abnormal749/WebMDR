@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Controller } from '../src/app/controller';
 import { encodeFrame, FrameParser, FrameType } from '../src/protocol/codec';
-import { XM5 } from '../src/protocol/profiles';
+import { SONY_V2 } from '../src/protocol/profiles';
 import type { NoiseRaw } from '../src/features/noiseControl';
 import { FakeChannel } from './fakeChannel';
 
@@ -50,13 +50,13 @@ beforeEach(() => {
   vi.useFakeTimers();
   channel = new FakeChannel();
   device = new FakeXm5(channel);
-  controller = new Controller(XM5, { timeoutMs: 1000 });
+  controller = new Controller({ timeoutMs: 1000 });
 });
 afterEach(() => vi.useRealTimers());
 
 describe('read-only session', () => {
   it('becomes ready only after init reply and a valid state read, and sends no setter', async () => {
-    await controller.attach(channel, 'read-only');
+    await controller.attach(channel, 'read-only', SONY_V2);
     expect(controller.state.phase).toBe('ready');
     expect(controller.state.noise.device).toEqual({ raw: device.state, via: 'reply' });
     expect(device.received).toEqual([[0x00, 0x00], [0x66, 0x17]]);
@@ -69,7 +69,7 @@ describe('read-only session', () => {
 
   it('does not become ready when initialization gets no reply', async () => {
     device.silent.add(0x00);
-    const attached = controller.attach(channel, 'control');
+    const attached = controller.attach(channel, 'control', SONY_V2);
     await vi.advanceTimersByTimeAsync(1000);
     await attached;
     expect(controller.state.phase).toBe('failed');
@@ -80,13 +80,13 @@ describe('read-only session', () => {
 
   it('does not become ready on a malformed state reply', async () => {
     device.state = { effect: 1, settingType: 1, voice: 0, level: 99 };
-    await controller.attach(channel, 'control');
+    await controller.attach(channel, 'control', SONY_V2);
     expect(controller.state.phase).toBe('failed');
     expect(controller.state.noise.device).toBeUndefined();
   });
 
   it('passive mode sends nothing and still decodes notifications', async () => {
-    await controller.attach(channel, 'passive');
+    await controller.attach(channel, 'passive', SONY_V2);
     device.notify({ effect: 0, settingType: 0, voice: 0, level: 4 });
     await flush();
     expect(channel.written).toEqual([]);
@@ -95,7 +95,7 @@ describe('read-only session', () => {
   });
 
   it('never uses 0x22 (V1 power-off) in any flow', async () => {
-    await controller.attach(channel, 'control');
+    await controller.attach(channel, 'control', SONY_V2);
     controller.commit({ mode: 'ambient', level: 5 });
     await flush();
     await controller.refresh();
@@ -105,7 +105,7 @@ describe('read-only session', () => {
 
 describe('noise-control change', () => {
   beforeEach(async () => {
-    await controller.attach(channel, 'control');
+    await controller.attach(channel, 'control', SONY_V2);
   });
 
   it('sends the merged state, preserving untouched fields, and confirms by fresh read', async () => {
@@ -241,7 +241,7 @@ describe('noise-control change', () => {
 
     const next = new FakeChannel();
     const nextDevice = new FakeXm5(next);
-    await controller.attach(next, 'control');
+    await controller.attach(next, 'control', SONY_V2);
     expect(nextDevice.received).toEqual([[0x00, 0x00], [0x66, 0x17]]);
     expect(controller.state.noise.last).toBeUndefined();
   });
@@ -253,7 +253,7 @@ describe('noise-control change', () => {
     await controller.disconnect();
     const next = new FakeChannel();
     new FakeXm5(next);
-    await controller.attach(next, 'read-only');
+    await controller.attach(next, 'read-only', SONY_V2);
     await vi.advanceTimersByTimeAsync(2000);
     expect(controller.state.phase).toBe('ready');
     expect(controller.state.mode).toBe('read-only');

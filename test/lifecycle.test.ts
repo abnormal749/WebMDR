@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Controller } from '../src/app/controller';
-import { XM5 } from '../src/protocol/profiles';
+import { SONY_V2 } from '../src/protocol/profiles';
 import { disconnectOnPageHide } from '../src/ui/lifecycle';
 import { FakeChannel } from './fakeChannel';
 
@@ -8,8 +8,8 @@ describe('disconnectOnPageHide', () => {
   it('closes an open session when the page is hidden', async () => {
     const page = new EventTarget();
     const channel = new FakeChannel();
-    const controller = new Controller(XM5);
-    await controller.attach(channel, 'passive');
+    const controller = new Controller();
+    await controller.attach(channel, 'passive', SONY_V2);
     const report = vi.fn();
     disconnectOnPageHide(page, () => controller.disconnect(), report);
 

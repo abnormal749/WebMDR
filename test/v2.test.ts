@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyEdit, mergeEdits, modeOf } from '../src/features/noiseControl';
 import { encodeFrame, FrameType } from '../src/protocol/codec';
-import { XM5 } from '../src/protocol/profiles';
+import { SONY_V2 } from '../src/protocol/profiles';
 import { decodeNoiseNotification, getNoiseOperation, initOperation, setNoiseOperation } from '../src/protocol/v2';
 import { fixtures, hex } from './fixtures';
 
@@ -16,34 +16,34 @@ describe('every outbound V2 operation, byte for byte', () => {
   });
 
   it('noise GET: 66 17', () => {
-    const op = getNoiseOperation(XM5);
+    const op = getNoiseOperation(SONY_V2);
     expect(op.kind).toBe('get');
     expect(wire(op.payload)).toEqual(fixtures.noiseGet);
   });
 
   it('noise SET: 68 17 01 effect type voice level', () => {
-    const op = setNoiseOperation(XM5, { effect: 1, settingType: 1, voice: 0, level: 12 });
+    const op = setNoiseOperation(SONY_V2, { effect: 1, settingType: 1, voice: 0, level: 12 });
     expect(op.kind).toBe('set');
     expect(wire(op.payload, 1)).toEqual(fixtures.noiseSetAmbient12);
   });
 
   it('SET validates enums and the profile write range', () => {
     const ok = { effect: 1, settingType: 1, voice: 0, level: 1 };
-    expect(() => setNoiseOperation(XM5, ok)).not.toThrow();
-    expect(() => setNoiseOperation(XM5, { ...ok, level: 0 })).toThrow(RangeError);
-    expect(() => setNoiseOperation(XM5, { ...ok, level: 21 })).toThrow(RangeError);
-    expect(() => setNoiseOperation(XM5, { ...ok, effect: 0x11 })).toThrow(RangeError);
-    expect(() => setNoiseOperation(XM5, { ...ok, voice: 2 })).toThrow(RangeError);
+    expect(() => setNoiseOperation(SONY_V2, ok)).not.toThrow();
+    expect(() => setNoiseOperation(SONY_V2, { ...ok, level: 0 })).toThrow(RangeError);
+    expect(() => setNoiseOperation(SONY_V2, { ...ok, level: 21 })).toThrow(RangeError);
+    expect(() => setNoiseOperation(SONY_V2, { ...ok, effect: 0x11 })).toThrow(RangeError);
+    expect(() => setNoiseOperation(SONY_V2, { ...ok, voice: 2 })).toThrow(RangeError);
   });
 
   it('no operation uses opcode 0x22', () => {
-    const ops = [initOperation(), getNoiseOperation(XM5), setNoiseOperation(XM5, { effect: 0, settingType: 0, voice: 0, level: 1 })];
+    const ops = [initOperation(), getNoiseOperation(SONY_V2), setNoiseOperation(SONY_V2, { effect: 0, settingType: 0, voice: 0, level: 1 })];
     expect(ops.map((o) => o.payload[0])).not.toContain(0x22);
   });
 });
 
 describe('reply and notification schemas', () => {
-  const match = getNoiseOperation(XM5).match;
+  const match = getNoiseOperation(SONY_V2).match;
   it('matches opcode, subtype and exact schema', () => {
     expect(match(hex('67 17 01 00 00 01 05'))).toEqual({ kind: 'match', value: { effect: 0, settingType: 0, voice: 1, level: 5 } });
     expect(match(hex('67 18 01 00 00 01 05')).kind).toBe('no-match');
@@ -60,8 +60,8 @@ describe('reply and notification schemas', () => {
   });
 
   it('decodes a 69 17 notification only', () => {
-    expect(decodeNoiseNotification(hex('69 17 01 00 00 01 05'), XM5).kind).toBe('match');
-    expect(decodeNoiseNotification(hex('67 17 01 00 00 01 05'), XM5).kind).toBe('no-match');
+    expect(decodeNoiseNotification(hex('69 17 01 00 00 01 05'), SONY_V2).kind).toBe('match');
+    expect(decodeNoiseNotification(hex('67 17 01 00 00 01 05'), SONY_V2).kind).toBe('no-match');
   });
 });
 

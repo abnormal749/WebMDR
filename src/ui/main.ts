@@ -1,8 +1,9 @@
 // DOM binding only. All protocol behaviour lives in src/app, src/protocol and src/transport.
 
 import { Controller, type ChangeResult, type ControllerState } from '../app/controller';
-import { modeOf, type NoiseMode, type NoiseRaw } from '../features/noiseControl';
-import { XM5 } from '../protocol/profiles';
+import type { NoiseMode, NoiseState } from '../features/noiseControl';
+import { dialectFor } from '../protocol/dialect';
+import { PROFILES, profileForService, type Evidence, type Profile } from '../protocol/profiles';
 import type { SessionMode } from '../protocol/session';
 import {
   authorizedServicePorts,
@@ -38,6 +39,7 @@ const ui = {
   diag: $<HTMLInputElement>('diag'),
   log: $<HTMLPreElement>('log'),
   build: $('build'),
+  devices: $('devices'),
 };
 
 const MAX_LOG_LINES = 400;
@@ -50,14 +52,14 @@ function diag(line: string): void {
   if (logLines.length > MAX_LOG_LINES) logLines.splice(0, logLines.length - MAX_LOG_LINES);
   ui.log.textContent = logLines.join('\n');
 }
-const controller = new Controller(XM5, { onLog: diag });
+const controller = new Controller({ onLog: diag });
+const SERVICES = PROFILES.map((p) => p.serviceUuid);
+const profileOf = (p: SerialPortLike | undefined): Profile | undefined => profileForService(p?.getInfo().bluetoothServiceClassId);
 
 let port: SerialPortLike | undefined;
 let portOpen = false;
 let busy = false;
 
-ui.level.min = String(XM5.noiseControl.levelWrite.min);
-ui.level.max = String(XM5.noiseControl.levelWrite.max);
 
 function selectedMode(): SessionMode {
   const value = (document.querySelector('input[name="mode"]:checked') as HTMLInputElement).value;
@@ -93,6 +95,8 @@ let openNetworkError = false;
 
 async function connect(): Promise<void> {
   if (!port) return;
+  const profile = profileOf(port);
+  if (!profile) throw new Error('The selected port exposes no Sony service that WebMDR knows.');
   openNetworkError = false;
   diag(`opening port (device available: ${port.connected ?? 'not reported'})`);
   let channel;
@@ -103,10 +107,10 @@ async function connect(): Promise<void> {
     openNetworkError = error instanceof Error && error.name === 'NetworkError';
     throw error;
   }
-  diag('port open');
+  diag(`port open; protocol ${profile.label} from service ${profile.serviceUuid}`);
   portOpen = true;
   try {
-    await controller.attach(channel, selectedMode());
+    await controller.attach(channel, selectedMode(), profile);
   } catch (error) {
     await channel.close();
     portOpen = false;
@@ -117,7 +121,7 @@ async function connect(): Promise<void> {
 ui.choose.addEventListener('click', () =>
   withBusy(async () => {
     if (!serial) return;
-    port = await requestServicePort(serial, XM5.serviceUuid); // user gesture
+    port = await requestServicePort(serial, SERVICES); // user gesture
     await connect();
   }),
 );
@@ -210,6 +214,7 @@ function render(state: ControllerState): void {
     ['Port authorized', port ? yes('yes') : no('no')],
     ['Device available', available === undefined ? no('not reported') : available ? yes('yes') : no('no')],
     ['Port open', portOpen ? yes('yes') : no('no')],
+    ['Protocol', profileOf(port) ? escapeHtml(profileOf(port)!.label) : no('—')],
     ['Session mode', state.mode ?? no('—')],
     ['Protocol ready', protocolLabel(state)],
   ];
@@ -220,9 +225,30 @@ function render(state: ControllerState): void {
   renderNoise(state);
 }
 
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+}
+
+const EVIDENCE_LABEL: Record<Evidence, string> = {
+  'hardware-verified': 'tested in WebMDR',
+  'source-reviewed': 'untested (upstream source only)',
+  unknown: 'unknown',
+  unsupported: 'unsupported',
+};
+
+function renderDevices(): void {
+  ui.devices.innerHTML = PROFILES.map((p) => {
+    const rows = p.models
+      .map((m) => `<tr><td>${escapeHtml(m.model)}</td><td class="${m.evidence === 'hardware-verified' ? 'yes' : 'no'}">${EVIDENCE_LABEL[m.evidence]}</td><td>${escapeHtml(m.note)}</td></tr>`)
+      .join('');
+    return `<h3>${escapeHtml(p.label)} <code>${p.serviceUuid}</code></h3><table><thead><tr><th>Model</th><th>Noise control</th><th>Evidence</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }).join('');
+}
+
 function protocolLabel(state: ControllerState): string {
   switch (state.phase) {
-    case 'ready': return yes('yes — init reply and valid state read');
+    case 'ready':
+      return yes(state.profile && dialectFor(state.profile).init ? 'yes — init reply and valid state read' : 'yes — valid state read');
     case 'initializing': return '<span class="warn">initializing…</span>';
     case 'observing': return no('not attempted (passive)');
     case 'failed': return '<span class="bad">no — reconnect required</span>';
@@ -233,24 +259,30 @@ function protocolLabel(state: ControllerState): string {
 function renderNoise(state: ControllerState): void {
   const { device, inFlight, queued, last } = state.noise;
   const editable = controller.canChange;
+  const view = device ? controller.view(device.raw) : undefined;
+  const range = state.profile?.noiseControl.levelWrite;
+  if (range) {
+    ui.level.min = String(range.min);
+    ui.level.max = String(range.max);
+  }
 
-  ui.deviceState.textContent = device
-    ? `Device reports: ${describeRaw(device.raw)} (${device.via === 'reply' ? 'read reply' : 'notification'})`
+  ui.deviceState.textContent = view
+    ? `Device reports: ${describeState(view)} (${device!.via === 'reply' ? 'read reply' : 'notification'})`
     : 'No device state.';
 
   // Show the device's values unless the user has an edit in progress.
-  if (device && !inFlight && !queued) {
-    const mode = modeOf(device.raw);
-    for (const r of ui.ncMode.querySelectorAll<HTMLInputElement>('input')) r.checked = r.value === mode;
+  if (view && !inFlight && !queued) {
+    for (const r of ui.ncMode.querySelectorAll<HTMLInputElement>('input')) r.checked = r.value === view.mode;
     // Never move the thumb under the user's pointer while dragging.
-    if (!draggingLevel) ui.level.value = String(device.raw.level);
-    ui.voice.checked = device.raw.voice === 1;
+    if (!draggingLevel) ui.level.value = String(view.level);
+    ui.voice.checked = view.voice;
   }
-  // Without device state there is no level to show; the slider position is only a presentation default.
-  ui.levelOut.value = device ? ui.level.value : '—';
+  // A level outside the settable range (e.g. V1 reports 0 outside ambient) is not shown as a
+  // slider position; the thumb's resting place is only a presentation default.
+  ui.levelOut.value = view && range && view.level >= range.min && view.level <= range.max ? ui.level.value : '—';
   ui.build.textContent = __WEBMDR_BUILD__;
   ui.ncMode.disabled = !editable;
-  ui.ncAmbient.disabled = !editable || !device || modeOf(device.raw) !== 'ambient';
+  ui.ncAmbient.disabled = !editable || view?.mode !== 'ambient';
 
   const lines: string[] = [];
   if (inFlight) {
@@ -264,10 +296,14 @@ function renderNoise(state: ControllerState): void {
   ui.change.textContent = lines.join(' ');
 }
 
-function describeRaw(raw: NoiseRaw): string {
-  const mode = modeOf(raw);
-  const name = mode === 'off' ? 'Off' : mode === 'ambient' ? 'Ambient' : 'Noise cancelling';
-  return `${name}, level ${raw.level}${mode === 'ambient' ? '' : ' (inactive)'}, voice focus ${raw.voice ? 'on' : 'off'}`;
+function describeState(s: NoiseState): string {
+  const name = s.mode === 'off' ? 'Off' : s.mode === 'ambient' ? 'Ambient' : 'Noise cancelling';
+  return `${name}, level ${s.level}${s.mode === 'ambient' ? '' : ' (inactive)'}, voice passthrough ${s.voice ? 'on' : 'off'}`;
+}
+
+function describeRaw(raw: unknown): string {
+  const view = controller.view(raw);
+  return view ? describeState(view) : 'unknown state';
 }
 
 function describeResult(r: ChangeResult): string {
@@ -281,6 +317,7 @@ function describeResult(r: ChangeResult): string {
 
 // ---- startup (after all module-level bindings are initialized) ----
 
+renderDevices();
 controller.subscribe((state) => {
   if (state.phase === 'idle') portOpen = false;
   render(state);
@@ -289,7 +326,7 @@ controller.subscribe((state) => {
 void (async () => {
   if (!serial) return;
   // Previously authorized ports are offered for a manual connect, never opened automatically.
-  const ports = await authorizedServicePorts(serial, XM5.serviceUuid);
+  const ports = await authorizedServicePorts(serial, SERVICES);
   if (ports[0] && !port) {
     port = ports[0];
     render(controller.state);

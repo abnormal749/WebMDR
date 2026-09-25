@@ -19,6 +19,9 @@ Commit: `dea38969b501a4a167f330dff104414531e80eae` (main when inspected; commit 
 | [CapabilityDiscovery.cpp](https://github.com/marconvcm/sony-device-center/blob/dea38969b501a4a167f330dff104414531e80eae/libs/sony-protocol/src/CapabilityDiscovery.cpp) | Static fast path and query-based capability inference |
 | [README](https://github.com/marconvcm/sony-device-center/blob/dea38969b501a4a167f330dff104414531e80eae/README.md) | Upstream support claims and documented UUID discrepancy; not a WebMDR support matrix |
 | [LICENSE](https://github.com/marconvcm/sony-device-center/blob/dea38969b501a4a167f330dff104414531e80eae/LICENSE) | MIT notice and required preservation of notices |
+| [MacOSBluetoothConnector.mm](https://github.com/marconvcm/sony-device-center/blob/dea38969b501a4a167f330dff104414531e80eae/Client/macos/MacOSBluetoothConnector.mm) | Protocol version chosen from the service record found (legacy UUID -> V1, else V2) |
+| [HeadphonesBridge.mm](https://github.com/marconvcm/sony-device-center/blob/dea38969b501a4a167f330dff104414531e80eae/Client/macos/HeadphonesBridge.mm) | Maximum ambient level exposed per protocol version (V2 20, V1 19) |
+| [ProtocolV1Tests.cpp](https://github.com/marconvcm/sony-device-center/blob/dea38969b501a4a167f330dff104414531e80eae/tests/protocol/ProtocolV1Tests.cpp) | V1 noise-control reply and setter byte fixtures |
 
 These files were inspected; upstream's entire test suite, all device reports and all transitive code provenance were not audited. Static-review concerns are not presented as reproduced upstream defects.
 

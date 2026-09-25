@@ -92,6 +92,15 @@ Use a small profile table with explicit provenance, per-feature read/write statu
 
 Web Serial's public port information has no Bluetooth name, MAC address or model field. Do not port a native name-based detector unchanged. Use a reviewed identification exchange where available; an explicit model selection may serve as an initial hint, not proof. Never key device state by service UUID alone: multiple devices can share it. [Browser interface](docs/sources.md#browser-and-hosting).
 
+**Current implementation.** The service UUID selects the protocol *dialect* (which bytes to send), exactly as upstream's macOS client does: the legacy service means V1, the newer service means V2. It identifies no device and keys no stored state. Both dialects implement noise control from upstream source ([`src/protocol/v2.ts`](src/protocol/v2.ts), [`src/protocol/v1.ts`](src/protocol/v1.ts)); controls enable only after a strictly validated state reply, so an incompatible device fails without any setter being sent. The models upstream lists for each dialect are shown on the page with their evidence ([`src/protocol/profiles.ts`](src/protocol/profiles.ts)):
+
+| Dialect | Tested in WebMDR | Listed upstream, untested in WebMDR |
+| --- | --- | --- |
+| V2 (`956c7b26…`) | WH-1000XM5 (H-003 to H-006) | WH-1000XM6, WF-1000XM4, WF-1000XM5, WF-1000XM6, WH-CH720N, ULT WEAR, LinkBuds S, newer WH-1000XM4 units |
+| V1 (`96cc203e…`) | none | WH-1000XM3, WH-1000XM4 |
+
+A report for another model belongs in the [evidence record](docs/device-matrix.md) with model, firmware and the log.
+
 ## Reuse and licensing
 
 Create a separate web repository rather than inheriting the whole desktop application. Reference Sony Device Center at the audited commit:
@@ -108,14 +117,14 @@ Adapted Sony Device Center material is listed file by file in the [reuse manifes
 
 ## Development milestones
 
-| Step | Exit criterion |
-| --- | --- |
-| Codec + transport lifecycle | Independent byte fixtures pass; open/close/reopen works |
-| Read-only Sony session | Source-backed initialization and current-state query receive valid, fresh replies |
-| One setting change | An explicitly requested change is confirmed by subsequent device state |
-| Minimal UI | Controls preserve sibling fields and remain truthful on timeout/disconnect |
-| Pages release | The same tested build works from its deployed HTTPS origin |
-| Additional devices | Model/firmware/feature evidence is added to the matrix |
+| Step | Exit criterion | Status |
+| --- | --- | --- |
+| Codec + transport lifecycle | Independent byte fixtures pass; open/close/reopen works | Done (H-003, H-005); reopen after a headset power cycle is a known Chrome issue |
+| Read-only Sony session | Source-backed initialization and current-state query receive valid, fresh replies | Done on XM5 (H-003) |
+| One setting change | An explicitly requested change is confirmed by subsequent device state | Done on XM5 (H-003, H-004) |
+| Minimal UI | Controls preserve sibling fields and remain truthful on timeout/disconnect | Done (H-003 to H-006; timeout behaviour unit-tested only) |
+| Pages release | The same tested build works from its deployed HTTPS origin | Done (H-005, H-006) |
+| Additional devices | Model/firmware/feature evidence is added to the matrix | Code for V2 and V1 dialects in place; **needs hardware reports** for any model other than the XM5 |
 
 A short passive RX observation is a diagnostic aid, not a prerequisite that must produce data. The audited V2 implementation initiates communication from the host.
 

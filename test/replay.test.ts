@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Controller } from '../src/app/controller';
 import type { NoiseEdit } from '../src/features/noiseControl';
 import { encodeFrame } from '../src/protocol/codec';
-import { XM5 } from '../src/protocol/profiles';
+import { SONY_V2 } from '../src/protocol/profiles';
 import h003 from './captures/h003.log?raw';
 import h004 from './captures/h004.log?raw';
 import { FakeChannel } from './fakeChannel';
@@ -37,7 +37,7 @@ function parse(capture: string): Line[] {
 
 async function replay(lines: Line[], actions: Record<string, Action>): Promise<{ produced: string[]; controller: Controller }> {
   const produced: string[] = [];
-  const controller = new Controller(XM5, { onLog: (line) => produced.push(line) });
+  const controller = new Controller({ onLog: (line) => produced.push(line) });
   let channel = new FakeChannel();
   let rxGroup: number[] = [];
   const flush = () => vi.advanceTimersByTimeAsync(0);
@@ -54,7 +54,7 @@ async function replay(lines: Line[], actions: Record<string, Action>): Promise<{
       await deliverRx();
       if (action === 'attach') {
         channel = new FakeChannel();
-        void controller.attach(channel, 'control');
+        void controller.attach(channel, 'control', SONY_V2);
       } else if (action === 'refresh') void controller.refresh();
       else if (action === 'disconnect') void controller.disconnect();
       else if (action === 'device-lost') channel.failRead(new Error('The device has been lost.'));

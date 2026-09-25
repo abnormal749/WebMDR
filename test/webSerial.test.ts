@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { XM5, SONY_V2_SERVICE_UUID } from '../src/protocol/profiles';
+import { SONY_V1_SERVICE_UUID, SONY_V2, SONY_V2_SERVICE_UUID } from '../src/protocol/profiles';
 import { Session, SessionError } from '../src/protocol/session';
 import { getNoiseOperation } from '../src/protocol/v2';
 import {
@@ -67,21 +67,26 @@ function fakeSerial(ports: SerialPortLike[]): SerialLike & { requests: unknown[]
 describe('port selection', () => {
   it('requests with an exact service filter and allowlist', async () => {
     const serial = fakeSerial([new FakePort()]);
-    await requestServicePort(serial, SONY_V2_SERVICE_UUID.toUpperCase());
+    await requestServicePort(serial, [SONY_V2_SERVICE_UUID.toUpperCase(), SONY_V1_SERVICE_UUID]);
     expect(serial.requests).toEqual([
-      { filters: [{ bluetoothServiceClassId: SONY_V2_SERVICE_UUID }], allowedBluetoothServiceClassIds: [SONY_V2_SERVICE_UUID] },
+      {
+        filters: [{ bluetoothServiceClassId: SONY_V2_SERVICE_UUID }, { bluetoothServiceClassId: SONY_V1_SERVICE_UUID }],
+        allowedBluetoothServiceClassIds: [SONY_V2_SERVICE_UUID, SONY_V1_SERVICE_UUID],
+      },
     ]);
   });
 
   it('rejects a port whose info does not name the service', async () => {
-    await expect(requestServicePort(fakeSerial([new FakePort(null)]), SONY_V2_SERVICE_UUID)).rejects.toThrow();
-    await expect(requestServicePort(fakeSerial([new FakePort('96cc203e-5068-46ad-b32d-e316f5e069ba')]), SONY_V2_SERVICE_UUID)).rejects.toThrow();
+    await expect(requestServicePort(fakeSerial([new FakePort(null)]), [SONY_V2_SERVICE_UUID])).rejects.toThrow();
+    await expect(requestServicePort(fakeSerial([new FakePort(SONY_V1_SERVICE_UUID)]), [SONY_V2_SERVICE_UUID])).rejects.toThrow();
+    await expect(requestServicePort(fakeSerial([new FakePort('00000000-deca-fade-deca-deafdecacaff')]), [SONY_V2_SERVICE_UUID, SONY_V1_SERVICE_UUID])).rejects.toThrow();
   });
 
   it('lists only authorized ports for the service', async () => {
     const good = new FakePort();
-    const ports = await authorizedServicePorts(fakeSerial([new FakePort(null), good]), SONY_V2_SERVICE_UUID);
-    expect(ports).toEqual([good]);
+    const legacy = new FakePort(SONY_V1_SERVICE_UUID);
+    const ports = await authorizedServicePorts(fakeSerial([new FakePort(null), good, legacy]), [SONY_V2_SERVICE_UUID, SONY_V1_SERVICE_UUID]);
+    expect(ports).toEqual([good, legacy]);
   });
 
   it('feature-detects navigator.serial', () => {
@@ -156,7 +161,7 @@ describe('channel lifecycle', () => {
   it('a session over a real stream pair closes during a pending request', async () => {
     const port = new FakePort();
     const session = new Session(await openSerialChannel(port), { mode: 'read-only' });
-    const request = session.request(getNoiseOperation(XM5)).catch((e: unknown) => e);
+    const request = session.request(getNoiseOperation(SONY_V2)).catch((e: unknown) => e);
     await new Promise((r) => setTimeout(r, 0));
     expect(port.written).toEqual([fixtures.noiseGet]);
     await session.close();

@@ -4,8 +4,9 @@
 // Deliberately absent: opcode 0x22 (V2 battery). The audited V1 source
 // identifies 0x22 as power-off, so it is never used as a probe.
 
-import { invalidRaw, type NoiseRaw } from '../features/noiseControl';
-import type { Profile } from './profiles';
+import { applyEdit, invalidRaw, modeOf, sameRaw, type NoiseRaw } from '../features/noiseControl';
+import type { NoiseDialect } from './dialect';
+import { SONY_V2, type Profile } from './profiles';
 import type { CommandOperation, Match, RequestOperation } from './session';
 
 const SOURCE = 'marconvcm/sony-device-center libs/sony-protocol/src/ProtocolV2.cpp @ dea38969b501a4a167f330dff104414531e80eae';
@@ -87,4 +88,20 @@ function decodeNoise(p: Uint8Array, opcode: number, inquiry: number, level: Prof
   const raw: NoiseRaw = { effect: p[3]!, settingType: p[4]!, voice: p[5]!, level: p[6]! };
   const problem = invalidRaw(raw, level);
   return problem ? { kind: 'malformed', reason: problem } : { kind: 'match', value: raw };
+}
+
+export function v2Dialect(profile: Profile = SONY_V2): NoiseDialect<NoiseRaw> {
+  return {
+    profile,
+    init: initOperation,
+    get: () => getNoiseOperation(profile),
+    set: (raw) => setNoiseOperation(profile, raw),
+    decodeNotification: (payload) => decodeNoiseNotification(payload, profile),
+    isReply: isNoiseReply,
+    view: (raw) => ({ mode: modeOf(raw), level: raw.level, voice: raw.voice === 1 }),
+    // Raw-preserving: untouched fields, including an inactive level, are sent back as read.
+    apply: applyEdit,
+    // H-003: the XM5 reads back exactly the bytes it was sent.
+    confirms: sameRaw,
+  };
 }

@@ -1,10 +1,14 @@
-// XM5 controller: connection lifecycle and noise-control flow, without DOM.
+// Controller: connection lifecycle and noise-control flow, without DOM. The
+// dialect (and so every byte) comes from the profile of the selected service.
 
-import { applyEdit, mergeEdits, sameRaw, type NoiseEdit, type NoiseRaw } from '../features/noiseControl';
+import { mergeEdits, type NoiseEdit, type NoiseState } from '../features/noiseControl';
 import { toHex } from '../protocol/codec';
+import { dialectFor, type NoiseDialect } from '../protocol/dialect';
 import type { Profile } from '../protocol/profiles';
 import { Session, SessionError, type ByteChannel, type Receipt, type SessionEvent, type SessionMode } from '../protocol/session';
-import { decodeNoiseNotification, getNoiseOperation, initOperation, isNoiseReply, setNoiseOperation } from '../protocol/v2';
+
+/** A dialect-specific raw byte state; interpret it only through the dialect. */
+type Raw = unknown;
 
 export type Phase =
   | 'idle'          // no open session
@@ -15,17 +19,17 @@ export type Phase =
   | 'closing';
 
 export type ChangeResult =
-  | { kind: 'confirmed'; target: NoiseRaw; receipt: Receipt }
+  | { kind: 'confirmed'; target: Raw; receipt: Receipt }
   /** ACKed, but the fresh read-back differs; the device's report is shown. */
-  | { kind: 'mismatch'; target: NoiseRaw; reported: NoiseRaw; receipt: Receipt }
+  | { kind: 'mismatch'; target: Raw; reported: Raw; receipt: Receipt }
   /** The device may or may not have applied it. */
-  | { kind: 'unknown'; target: NoiseRaw; detail: string }
+  | { kind: 'unknown'; target: Raw; detail: string }
   | { kind: 'not-sent'; detail: string };
 
 export interface NoiseView {
   /** Latest device-reported state; never a local guess. */
-  device?: { raw: NoiseRaw; via: 'reply' | 'notification' };
-  inFlight?: { target: NoiseRaw; stage: 'awaiting-ack' | 'confirming' };
+  device?: { raw: Raw; via: 'reply' | 'notification' };
+  inFlight?: { target: Raw; stage: 'awaiting-ack' | 'confirming' };
   /** Latest user edit not yet sent. Replaced, never accumulated as history. */
   queued?: NoiseEdit;
   last?: ChangeResult;
@@ -34,6 +38,8 @@ export interface NoiseView {
 export interface ControllerState {
   phase: Phase;
   mode?: SessionMode;
+  /** Profile of the connected service; undefined when idle. */
+  profile?: Profile;
   detail: string;
   noise: NoiseView;
 }
@@ -51,8 +57,9 @@ export class Controller {
   /** Identifies the current connection; results from older ones are dropped. */
   private connection = 0;
   private work: Promise<void> | undefined;
+  private dialect: NoiseDialect<Raw> | undefined;
 
-  constructor(readonly profile: Profile, private readonly options: ControllerOptions = {}) {}
+  constructor(private readonly options: ControllerOptions = {}) {}
 
   get state(): ControllerState {
     return this._state;
@@ -61,7 +68,18 @@ export class Controller {
   /** True only when a user change may be sent now or queued. */
   get canChange(): boolean {
     const s = this._state;
-    return s.phase === 'ready' && s.mode === 'control' && s.noise.device !== undefined && this.profile.noiseControl.write !== 'unsupported';
+    return (
+      s.phase === 'ready' &&
+      s.mode === 'control' &&
+      s.noise.device !== undefined &&
+      s.profile !== undefined &&
+      s.profile.noiseControl.write !== 'unsupported'
+    );
+  }
+
+  /** Meaning of a raw state from the current connection's dialect. */
+  view(raw: Raw): NoiseState | undefined {
+    return this.dialect?.view(raw);
   }
 
   subscribe(listener: (s: ControllerState) => void): () => void {
@@ -70,33 +88,37 @@ export class Controller {
     return () => this.listeners.delete(listener);
   }
 
-  async attach(channel: ByteChannel, mode: SessionMode): Promise<void> {
+  async attach(channel: ByteChannel, mode: SessionMode, profile: Profile): Promise<void> {
     if (this.session) throw new Error('already attached; disconnect first');
     const connection = ++this.connection;
+    const dialect = dialectFor(profile);
+    this.dialect = dialect;
     const session = new Session(channel, {
       mode,
       ...(this.options.timeoutMs === undefined ? {} : { timeoutMs: this.options.timeoutMs }),
       onEvent: (e) => this.onSessionEvent(connection, e),
     });
     this.session = session;
-    this.set({ phase: mode === 'passive' ? 'observing' : 'initializing', mode, detail: 'Port open', noise: {} });
+    this.set({ phase: mode === 'passive' ? 'observing' : 'initializing', mode, profile, detail: 'Port open', noise: {} });
     void session.closed.then((reason) => this.onClosed(connection, reason));
 
     if (mode === 'passive') {
       this.set({ detail: 'Passive: listening only; nothing is sent' });
       return;
     }
-    this.work = this.initialize(connection, session);
+    this.work = this.initialize(connection, session, dialect);
     await this.work;
   }
 
-  private async initialize(connection: number, session: Session): Promise<void> {
+  private async initialize(connection: number, session: Session, dialect: NoiseDialect<Raw>): Promise<void> {
     try {
-      this.set({ detail: 'Sending V2 initialization' });
-      const init = await session.request(initOperation());
-      this.log(connection, `init reply: ${toHex(init.value)}`);
+      if (dialect.init) {
+        this.set({ detail: `Sending ${dialect.profile.label} initialization` });
+        const init = await session.request(dialect.init());
+        this.log(connection, `init reply: ${toHex(init.value)}`);
+      }
       this.set({ detail: 'Reading noise-control state' });
-      const { value } = await session.request(getNoiseOperation(this.profile));
+      const { value } = await session.request(dialect.get());
       if (connection !== this.connection) return;
       this.set({ phase: 'ready', detail: 'Protocol ready; state read from device', noise: { device: { raw: value, via: 'reply' } } });
     } catch (error) {
@@ -109,12 +131,12 @@ export class Controller {
 
   /** Fresh GET. Ignored while other work is running. */
   async refresh(): Promise<void> {
-    const session = this.session;
-    if (!session || this._state.phase !== 'ready' || this.work) return;
+    const { session, dialect } = this;
+    if (!session || !dialect || this._state.phase !== 'ready' || this.work) return;
     const connection = this.connection;
     this.work = (async () => {
       try {
-        const { value } = await session.request(getNoiseOperation(this.profile));
+        const { value } = await session.request(dialect.get());
         if (connection === this.connection) this.setNoise({ device: { raw: value, via: 'reply' } });
       } catch (error) {
         if (connection === this.connection) this.onFailure(error);
@@ -141,16 +163,16 @@ export class Controller {
 
   private async drain(): Promise<void> {
     if (this.work) return;
-    const session = this.session;
+    const { session, dialect } = this;
     const { queued, device } = this._state.noise;
-    if (!session || !queued || !device || !this.canChange) return;
+    if (!session || !dialect || !queued || !device || !this.canChange) return;
     const connection = this.connection;
     // Merge onto the latest device-reported state at send time.
-    const target = applyEdit(device.raw, queued);
+    const target = dialect.apply(device.raw, queued);
 
     let op;
     try {
-      op = setNoiseOperation(this.profile, target);
+      op = dialect.set(target);
     } catch (error) {
       this.setNoise({ queued: undefined, last: { kind: 'not-sent', detail: describe(error) } });
       return;
@@ -165,9 +187,9 @@ export class Controller {
         receipt = (await session.command(op)).receipt;
         if (connection !== this.connection) return;
         this.setNoise({ inFlight: { target, stage: 'confirming' } });
-        const { value } = await session.request(getNoiseOperation(this.profile));
+        const { value } = await session.request(dialect.get());
         if (connection !== this.connection) return;
-        const last: ChangeResult = sameRaw(value, target)
+        const last: ChangeResult = dialect.confirms(target, value)
           ? { kind: 'confirmed', target, receipt }
           : { kind: 'mismatch', target, reported: value, receipt };
         this.setNoise({ device: { raw: value, via: 'reply' }, inFlight: undefined, last });
@@ -216,6 +238,7 @@ export class Controller {
     const outcome: ChangeResult | undefined = inFlight
       ? { kind: 'unknown', target: inFlight.target, detail: 'disconnected before confirmation' }
       : last;
+    // The profile stays so the kept outcome can still be described.
     this.set({ phase: 'idle', detail: `Disconnected: ${reason}`, noise: outcome ? { last: outcome } : {} });
   }
 
@@ -242,7 +265,9 @@ export class Controller {
   }
 
   private onNotification(connection: number, payload: Uint8Array): void {
-    const decoded = decodeNoiseNotification(payload, this.profile);
+    const dialect = this.dialect;
+    if (!dialect) return;
+    const decoded = dialect.decodeNotification(payload);
     if (decoded.kind === 'match') {
       // External change (button, other controller): adopt it. Queued edits are
       // partial and will be applied on top of this state, not enforce an old one.
@@ -250,7 +275,7 @@ export class Controller {
       return this.log(connection, 'noise notification adopted');
     }
     if (decoded.kind === 'malformed') return this.log(connection, `noise notification rejected: ${decoded.reason}`);
-    if (isNoiseReply(payload)) return this.log(connection, 'unrequested 67 reply ignored (not fresh)');
+    if (dialect.isReply(payload)) return this.log(connection, 'unrequested 67 reply ignored (not fresh)');
     this.log(connection, `unhandled notification [${toHex(payload)}]`);
   }
 

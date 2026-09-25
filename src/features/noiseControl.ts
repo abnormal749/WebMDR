@@ -1,9 +1,10 @@
-// Noise-control state. The V2 setter carries mode, voice focus and level
+// Noise-control state. Each dialect's setter carries mode, voice and level
 // together, so edits are merged onto the latest device-reported state.
+// The raw helpers below are the V2 layout; V1 lives in protocol/v1.ts.
 
 import type { Range } from '../protocol/profiles';
 
-/** Raw device bytes from 67/69 17 01 <effect> <settingType> <voice> <level>. */
+/** Raw V2 device bytes from 67/69 17 01 <effect> <settingType> <voice> <level>. */
 export interface NoiseRaw {
   effect: number;      // 0 off, 1 on
   settingType: number; // 0 noise cancelling, 1 ambient
@@ -17,6 +18,14 @@ export interface NoiseEdit {
   mode?: NoiseMode;
   level?: number;
   voice?: boolean;
+}
+
+/** Dialect-independent view of a device-reported state, for display and confirmation. */
+export interface NoiseState {
+  mode: NoiseMode;
+  /** Raw level as reported, also while ambient sound is inactive. */
+  level: number;
+  voice: boolean;
 }
 
 export function modeOf(raw: NoiseRaw): NoiseMode {

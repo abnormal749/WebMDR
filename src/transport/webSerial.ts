@@ -40,22 +40,22 @@ export function matchesService(port: SerialPortLike, serviceUuid: string): boole
   return typeof id === 'string' && id.toLowerCase() === serviceUuid.toLowerCase();
 }
 
-/** Must be called from a user gesture. */
-export async function requestServicePort(serial: SerialLike, serviceUuid: string): Promise<SerialPortLike> {
-  const uuid = serviceUuid.toLowerCase();
+/** Must be called from a user gesture. Offers only ports exposing one of `serviceUuids`. */
+export async function requestServicePort(serial: SerialLike, serviceUuids: readonly string[]): Promise<SerialPortLike> {
+  const uuids = serviceUuids.map((u) => u.toLowerCase());
   const port = await serial.requestPort({
-    filters: [{ bluetoothServiceClassId: uuid }],
-    allowedBluetoothServiceClassIds: [uuid],
+    filters: uuids.map((bluetoothServiceClassId) => ({ bluetoothServiceClassId })),
+    allowedBluetoothServiceClassIds: uuids,
   });
-  if (!matchesService(port, uuid)) {
-    throw new Error(`selected port does not expose service ${uuid}`);
+  if (!uuids.some((u) => matchesService(port, u))) {
+    throw new Error(`selected port exposes none of the services ${uuids.join(', ')}`);
   }
   return port;
 }
 
-/** Previously authorized ports for this service. Authorization is not availability. */
-export async function authorizedServicePorts(serial: SerialLike, serviceUuid: string): Promise<SerialPortLike[]> {
-  return (await serial.getPorts()).filter((p) => matchesService(p, serviceUuid));
+/** Previously authorized ports for these services. Authorization is not availability. */
+export async function authorizedServicePorts(serial: SerialLike, serviceUuids: readonly string[]): Promise<SerialPortLike[]> {
+  return (await serial.getPorts()).filter((p) => serviceUuids.some((u) => matchesService(p, u)));
 }
 
 /** Baud rate is required by the API but has no meaning for RFCOMM; 9600 is what H-001 used. */

@@ -21,3 +21,7 @@ Unit tests use a fake transport and fake time. They do not show that any byte wo
 | 7. Turn the headset off during a connected session | Page reports disconnected; controls disabled | Lifecycle |
 
 A step that fails or times out is recorded as such with the log excerpt. A timeout is inconclusive, not evidence that a feature is unsupported.
+
+## Testing another model
+
+Record the exact model name and firmware, and the **Protocol** row the page shows (Sony V2 or Sony V1). Start in Read-only mode: a pass there is "Protocol identified" and "Feature read" for that model. Only then try Control mode. A read failure with a "malformed" message is useful evidence of a different layout; include the log.
