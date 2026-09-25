@@ -30,7 +30,7 @@ class FakeXm5 {
     this.received.push(Array.from(p));
     if (this.silent.has(p[0]!)) return;
     this.channel.deliver(encodeFrame({ type: FrameType.Ack, seq: 1 - seq, payload: new Uint8Array() }));
-    if (p[0] === 0x00) this.send([0x01, 0x00, 0x00, 0x00]);
+    if (p[0] === 0x00) this.send([0x01, 0x00, 0x03, 0x00, 0x20, 0x16, 0x00, 0x00]); // H-003 reply
     if (p[0] === 0x66) this.send([0x67, 0x17, 0x01, this.state.effect, this.state.settingType, this.state.voice, this.state.level]);
     if (p[0] === 0x68 && this.applySets) this.state = { effect: p[3]!, settingType: p[4]!, voice: p[5]!, level: p[6]! };
   }
@@ -130,6 +130,22 @@ describe('noise-control change', () => {
     controller.commit({ voice: true });
     expect(controller.state.noise.queued).toEqual({ level: 5, voice: true });
     expect(device.received.filter((p) => p[0] === 0x68)).toHaveLength(1);
+  });
+
+  it('a live drag sends the first and the final position only, not the path between', async () => {
+    controller.commit({ mode: 'ambient', level: 5 });
+    await flush();
+    const g = new Promise<void>((r) => setTimeout(r, 50));
+    channel.writeGate = g; // hold the next change in flight while the "drag" continues
+    controller.commit({ level: 6 });
+    for (let level = 7; level <= 15; level++) controller.commit({ level });
+    expect(controller.state.noise.queued).toEqual({ level: 15 });
+    channel.writeGate = undefined;
+    await vi.advanceTimersByTimeAsync(60);
+    await flush();
+    const levels = device.received.filter((p) => p[0] === 0x68).map((p) => p[6]);
+    expect(levels).toEqual([5, 6, 15]);
+    expect(controller.state.noise.last).toMatchObject({ kind: 'confirmed', target: { level: 15 } });
   });
 
   it('sends the pending edit after the in-flight one is confirmed', async () => {

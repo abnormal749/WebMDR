@@ -20,9 +20,12 @@ const Opcode = {
   NoiseNotify: 0x69,
 } as const;
 
+/** Upstream Constants.h: "8 bytes total => v2 device"; H-003 observed exactly 8 on an XM5. */
+const INIT_REPLY_LENGTH = 8;
+
 /**
- * Host initialization: 00 00 -> reply opcode 01. Upstream does not validate
- * the reply body, so only the opcode is matched; its bytes are returned raw.
+ * Host initialization: 00 00 -> 01 + 7 bytes. The body's meaning is not
+ * documented upstream, so it is length-checked and returned raw.
  */
 export function initOperation(): RequestOperation<Uint8Array> {
   return {
@@ -32,7 +35,11 @@ export function initOperation(): RequestOperation<Uint8Array> {
     source: `${SOURCE} ProtocolV2::initDevice`,
     dialect: 'sony-v2',
     payload: Uint8Array.of(Opcode.InitRequest, 0x00),
-    match: (p) => (p[0] === Opcode.InitReply ? { kind: 'match', value: p.slice() } : { kind: 'no-match' }),
+    match: (p) => {
+      if (p[0] !== Opcode.InitReply) return { kind: 'no-match' };
+      if (p.length !== INIT_REPLY_LENGTH) return { kind: 'malformed', reason: `expected ${INIT_REPLY_LENGTH}-byte init reply, got ${p.length}` };
+      return { kind: 'match', value: p.slice() };
+    },
   };
 }
 

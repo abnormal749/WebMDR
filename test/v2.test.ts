@@ -52,8 +52,10 @@ describe('reply and notification schemas', () => {
     expect(match(hex('67 17 02 00 00 01 05')).kind).toBe('malformed');
   });
 
-  it('init reply is matched by opcode only and returned raw', () => {
-    expect(initOperation().match(hex('01 00 aa'))).toEqual({ kind: 'match', value: hex('01 00 aa') });
+  it('init reply: opcode 01, exactly 8 bytes, returned raw', () => {
+    const captured = hex('01 00 03 00 20 16 00 00'); // H-003
+    expect(initOperation().match(captured)).toEqual({ kind: 'match', value: captured });
+    expect(initOperation().match(hex('01 00 aa')).kind).toBe('malformed');
     expect(initOperation().match(hex('02 00')).kind).toBe('no-match');
   });
 

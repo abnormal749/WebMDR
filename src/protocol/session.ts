@@ -5,8 +5,8 @@
 //  - the host acknowledges a data frame with sequence 1 - (seq & 1);
 //  - the host adopts a device ACK's sequence (0 or 1) as its next TX sequence.
 // WebMDR therefore expects the device's ACK for TX sequence s to carry 1 - s.
-// This is source-derived, not hardware-verified: ACK status is recorded
-// separately and a GET completes on its validated reply, not on the ACK.
+// H-003 observed exactly this on a WH-1000XM5 for every TX (test/replay.test.ts).
+// ACK status is still recorded separately; a GET completes on its validated reply.
 
 import { encodeFrame, FrameParser, FrameType, type Frame, type ParseError } from './codec';
 

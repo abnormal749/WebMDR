@@ -45,6 +45,29 @@ Personal Bluetooth addresses, device names belonging to other devices, and seria
 
 No diagnostic log was supplied, so this record contains no protocol capture and no fixture may be labelled as captured from it.
 
+## H-003 — WH-1000XM5 noise-control session capture
+
+| Field | Recorded value |
+| --- | --- |
+| Date | 2026-09-25 (log times are UTC) |
+| Device | Sony WH-1000XM5 (user-operated) |
+| Firmware | Not reported |
+| Host / browser | Not reported |
+| Origin / build | Not reported (the log header recording both was added after this test) |
+| Capture | Diagnostics log, decoded frames: [`test/captures/h003.log`](../test/captures/h003.log). Raw wire bytes were not logged; every frame passed checksum and length validation. |
+| Replay | `test/replay.test.ts` feeds the captured RX back and requires the identical log, TX bytes and sequence numbers |
+
+| Stage | Result |
+| --- | --- |
+| Protocol identified | Pass: `00 00` → 8-byte reply `01 00 03 00 20 16 00 00`, identical on 3 connections |
+| ACK rule | Pass: all 23 host data frames with seq `s` were ACKed with `1 - s`; device data frames alternate starting at seq 1 per connection |
+| Feature read | Pass: `66 17` → `67 17 01 …` on every read; level retained while Off/NC (reported `0c`) |
+| Feature changed | Pass, each confirmed by a fresh read-back: Off, NC, Ambient; levels 3, 17, 12; voice passthrough on and off |
+| Notifications | The headset sends `69 17 01 …` (same layout as `67`) after each change, before the read-back |
+| Lifecycle | Partial: 3 clean close/reopen cycles; button adoption and power-off during a session not tested |
+| Timing (browser receipt times) | Change → ACK 21–47 ms; read → reply 21–71 ms; change → confirming reply 45–119 ms |
+| Deployed-site checked | Not recorded |
+
 ## Validation vocabulary
 
 Use separate results rather than one ambiguous “supported” badge:

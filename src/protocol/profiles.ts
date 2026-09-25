@@ -39,10 +39,10 @@ export const XM5: Profile = {
     inquiry: 0x17,
     levelRead: { min: 0, max: 20 },
     levelWrite: { min: 1, max: 20 },
-    read: 'source-reviewed',
-    write: 'source-reviewed',
+    read: 'hardware-verified',
+    write: 'hardware-verified',
     provenance:
-      'Layout: ProtocolV2.cpp @ dea3896 (66/67/68 17). Level 1–20: upstream V1 clamp; V2 setter never sends 0. ' +
-      'No XM5 value range has been hardware-verified in WebMDR.',
+      'Layout: ProtocolV2.cpp @ dea3896 (66/67/68 17). Verified on one XM5 unit in H-003 (firmware not recorded): ' +
+      'all modes, voice passthrough, levels 3/12/17. Level 1–20 range: upstream V1 clamp; 1, 2 and 18–20 not yet observed.',
   },
 };
