@@ -148,6 +148,22 @@ describe('noise-control change', () => {
     expect(controller.state.noise.last).toMatchObject({ kind: 'confirmed', target: { level: 15 } });
   });
 
+  it('never publishes a state with the edit neither queued nor in flight before confirmation', async () => {
+    // A UI that re-syncs its controls from device state in such a gap would read
+    // back the old value and send it as a new change (found in the browser).
+    const gaps: string[] = [];
+    let armed = false;
+    controller.subscribe((s) => {
+      if (armed && s.noise.last?.kind !== 'confirmed' && !s.noise.queued && !s.noise.inFlight) gaps.push(JSON.stringify(s.noise));
+    });
+    armed = true;
+    controller.commit({ mode: 'ambient', level: 19 });
+    await flush();
+    armed = false;
+    expect(controller.state.noise.last?.kind).toBe('confirmed');
+    expect(gaps).toEqual([]);
+  });
+
   it('sends the pending edit after the in-flight one is confirmed', async () => {
     const g = new Promise<void>((r) => setTimeout(r, 10));
     channel.writeGate = g;

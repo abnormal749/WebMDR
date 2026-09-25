@@ -147,20 +147,21 @@ export class Controller {
     const connection = this.connection;
     // Merge onto the latest device-reported state at send time.
     const target = applyEdit(device.raw, queued);
-    this.setNoise({ queued: undefined });
 
     let op;
     try {
       op = setNoiseOperation(this.profile, target);
     } catch (error) {
-      this.setNoise({ last: { kind: 'not-sent', detail: describe(error) } });
+      this.setNoise({ queued: undefined, last: { kind: 'not-sent', detail: describe(error) } });
       return;
     }
 
+    // One update: the edit moves from queued to in flight without an observable gap,
+    // so a UI never re-syncs its controls to the old device state mid-change.
+    this.setNoise({ queued: undefined, inFlight: { target, stage: 'awaiting-ack' } });
     this.work = (async () => {
       let receipt: Receipt | undefined;
       try {
-        this.setNoise({ inFlight: { target, stage: 'awaiting-ack' } });
         receipt = (await session.command(op)).receipt;
         if (connection !== this.connection) return;
         this.setNoise({ inFlight: { target, stage: 'confirming' } });
