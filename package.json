@@ -1,7 +1,7 @@
 {
   "name": "webmdr",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "description": "Browser-only Sony headphone controller (Web Serial over Bluetooth RFCOMM). Not affiliated with Sony.",
   "license": "MIT",

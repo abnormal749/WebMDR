@@ -106,6 +106,7 @@ A browser write, a protocol ACK and a confirmed setting are treated as three dif
 | Document | Contents |
 | --- | --- |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, workflow, pull-request checklist |
+| [CHANGELOG.md](CHANGELOG.md) | Changes in each release |
 | [AGENTS.md](AGENTS.md) | Protocol and architecture contract (for humans and coding agents) |
 | [docs/hardware-test.md](docs/hardware-test.md) | Step-by-step test with real headphones |
 | [docs/device-matrix.md](docs/device-matrix.md) | Hardware evidence records H-001 to H-006 |
