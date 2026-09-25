@@ -40,6 +40,11 @@ class FakePort implements SerialPortLike {
     this.controller?.enqueue(bytes);
   }
 
+  /** What Chrome does when the Bluetooth device powers off or goes out of range. */
+  lose(): void {
+    this.controller?.error(new DOMException('The device has been lost.', 'NetworkError'));
+  }
+
   async close(): Promise<void> {
     this.closes++;
     this.lockedAtClose = [this.readable!.locked, this.writable!.locked];
@@ -105,6 +110,33 @@ describe('channel lifecycle', () => {
     await expect(pendingRead).resolves.toMatchObject({ done: true });
     expect(port.lockedAtClose).toEqual([false, false]);
     expect(port.closes).toBe(1);
+  });
+
+  it('after the device is lost: skips cancelling the errored stream, releases locks, closes the port, reports no false failure', async () => {
+    const port = new FakePort();
+    const channel = await openSerialChannel(port);
+    const pendingRead = channel.read();
+    port.lose();
+    await expect(pendingRead).rejects.toThrow('The device has been lost.');
+    await expect(channel.close()).resolves.toBeUndefined();
+    expect(port.lockedAtClose).toEqual([false, false]);
+    expect(port.closes).toBe(1);
+  });
+
+  it('a session over a lost device closes cleanly and the port can be opened again', async () => {
+    const port = new FakePort();
+    const events: string[] = [];
+    const session = new Session(await openSerialChannel(port), {
+      mode: 'read-only',
+      onEvent: (e) => e.type === 'state' && events.push(`${e.state}: ${e.reason ?? ''}`),
+    });
+    port.lose();
+    await expect(session.closed).resolves.toBe('read failed: The device has been lost.');
+    expect(events.some((e) => e.includes('cleanup'))).toBe(false);
+    // Reopen after the device returns.
+    const again = await openSerialChannel(port);
+    expect(port.opens).toBe(2);
+    await again.close();
   });
 
   it('surfaces a cleanup failure instead of hiding it', async () => {

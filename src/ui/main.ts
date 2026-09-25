@@ -8,6 +8,7 @@ import {
   authorizedServicePorts,
   getSerial,
   openSerialChannel,
+  describe,
   requestServicePort,
   type SerialPortLike,
 } from '../transport/webSerial';
@@ -41,15 +42,14 @@ const ui = {
 const MAX_LOG_LINES = 400;
 const logLines: string[] = [];
 const serial = getSerial();
-const controller = new Controller(XM5, {
-  onLog: (line) => {
-    if (!ui.diag.checked) return;
-    if (logLines.length === 0) logLines.push(`WebMDR build ${__WEBMDR_BUILD__} at ${location.origin}; times are UTC`);
-    logLines.push(`${new Date().toISOString().slice(11, 23)}Z ${line}`);
-    if (logLines.length > MAX_LOG_LINES) logLines.splice(0, logLines.length - MAX_LOG_LINES);
-    ui.log.textContent = logLines.join('\n');
-  },
-});
+function diag(line: string): void {
+  if (!ui.diag.checked) return;
+  if (logLines.length === 0) logLines.push(`WebMDR build ${__WEBMDR_BUILD__} at ${location.origin}; times are UTC`);
+  logLines.push(`${new Date().toISOString().slice(11, 23)}Z ${line}`);
+  if (logLines.length > MAX_LOG_LINES) logLines.splice(0, logLines.length - MAX_LOG_LINES);
+  ui.log.textContent = logLines.join('\n');
+}
+const controller = new Controller(XM5, { onLog: diag });
 
 let port: SerialPortLike | undefined;
 let portOpen = false;
@@ -71,7 +71,7 @@ async function withBusy(task: () => Promise<void>): Promise<void> {
   try {
     await task();
   } catch (error) {
-    ui.detail.textContent = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    ui.detail.textContent = describe(error);
   } finally {
     busy = false;
     render(controller.state);
@@ -80,7 +80,15 @@ async function withBusy(task: () => Promise<void>): Promise<void> {
 
 async function connect(): Promise<void> {
   if (!port) return;
-  const channel = await openSerialChannel(port); // a second tab holding the port rejects here; no retry
+  diag(`opening port (device available: ${port.connected ?? 'not reported'})`);
+  let channel;
+  try {
+    channel = await openSerialChannel(port); // a second tab holding the port rejects here; no retry
+  } catch (error) {
+    diag(`open failed: ${describe(error)}`);
+    throw error;
+  }
+  diag('port open');
   portOpen = true;
   try {
     await controller.attach(channel, selectedMode());
@@ -145,8 +153,13 @@ window.addEventListener('pointercancel', endLevelDrag);
 
 disconnectOnPageHide(window, () => controller.disconnect(), (error) => console.error('WebMDR: disconnect on page hide failed', error));
 
-serial?.addEventListener?.('connect', () => render(controller.state));
-serial?.addEventListener?.('disconnect', () => render(controller.state));
+// Logical availability changes (Chrome 130+ for Bluetooth RFCOMM). Reconnect stays manual.
+for (const type of ['connect', 'disconnect'] as const) {
+  serial?.addEventListener?.(type, () => {
+    diag(`serial ${type} event (device available: ${port?.connected ?? 'not reported'})`);
+    render(controller.state);
+  });
+}
 
 // ---- rendering ----
 

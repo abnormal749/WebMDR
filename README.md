@@ -20,7 +20,7 @@ A user-operated prototype on macOS + desktop Chrome successfully selected and op
 | Frame codec, session, noise-control flow | Unit tests with fake transport and time (no hardware) |
 | Sony protocol exchange / state read | Captured on XM5 (H-003): init reply, state reads, ACK sequence rule |
 | Setting changes / confirmation | Off / NC / Ambient, levels 3–17 and voice passthrough confirmed by read-back on one XM5 (H-003) |
-| Audio coexistence / reconnect / multipoint | Not yet tested in WebMDR |
+| Audio coexistence / reconnect / multipoint | Power-off during a session handled (H-004); **reconnecting after power-on failed** and is under investigation; audio and multipoint not tested |
 | GitHub Pages deployment | Live at https://abnormal749.github.io/WebMDR/ (loads, CSP active); a hardware test from that origin is not yet recorded |
 
 See the sanitized [hardware evidence record](docs/device-matrix.md). Opening streams proves transport access, not that a Sony command has succeeded.

@@ -68,6 +68,35 @@ No diagnostic log was supplied, so this record contains no protocol capture and 
 | Timing (browser receipt times) | Change → ACK 21–47 ms; read → reply 21–71 ms; change → confirming reply 45–119 ms |
 | Deployed-site checked | Not recorded |
 
+## H-004 — WH-1000XM5 level range and power-off
+
+| Field | Recorded value |
+| --- | --- |
+| Date | 2026-09-25 (log times are UTC) |
+| Device | Sony WH-1000XM5 (user-operated) |
+| Firmware | Not reported |
+| Browser | Chrome 154.0.8037.57 (Official Build) (arm64); macOS version not reported |
+| Build | Earlier than `e5e325f` (inferred: the log lacks the build header and UTC marker added there); origin not recorded |
+| Capture | [`test/captures/h004.log`](../test/captures/h004.log), decoded frames; replayed in `test/replay.test.ts` |
+
+| Stage | Result |
+| --- | --- |
+| Protocol identified | Pass: same 8-byte init reply as H-003 |
+| Feature changed | Pass, each confirmed by read-back: levels 1, 20, 18, 17, 11, 8, 6, 4, 3, 1, 2, 7 — both ends of the 1–20 range accepted |
+| Timing | Change → ACK 18–47 ms; change → confirming reply 41–140 ms |
+| Unidentified notification | `a5 01 00 02 00` (seq 1) arrived 327 ms before the link was lost during power-off; ACKed, logged, not interpreted |
+| Power-off during session | Chrome reported `The device has been lost.`; session closed and controls disabled. The extra "cleanup failed" line came from cancelling an already-errored stream (fixed after this test) |
+| Reconnect after power-on | **Fail**: not possible, also from a new page. Error text not recorded; cause unknown (see below) |
+
+### Open issue: no reconnect after power-cycle
+
+Not yet diagnosed. A fresh page failing too suggests state below the page (Chrome or macOS Bluetooth), but that is unconfirmed. Chrome documents that it closes an open Bluetooth serial port itself when the device goes away, and that a page may reopen it later. Needed evidence, with Diagnostics on and the build shown in the footer:
+
+1. After power-on, the exact status text and `open failed:` log line from **Connect** in the same tab.
+2. Whether it works after closing every WebMDR tab and reopening the page.
+3. Whether it works after disconnecting and reconnecting the headset in macOS Bluetooth settings.
+4. Whether it works after quitting Chrome completely (⌘Q).
+
 ## Validation vocabulary
 
 Use separate results rather than one ambiguous “supported” badge:

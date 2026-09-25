@@ -72,21 +72,40 @@ export async function openSerialChannel(port: SerialPortLike): Promise<ByteChann
   const reader = port.readable.getReader();
   const writer = port.writable.getWriter();
   let closing: Promise<void> | undefined;
+  /** Set when a read fails, e.g. "The device has been lost"; the readable stream is then errored. */
+  let readFailed = false;
 
   return {
-    read: () => reader.read() as ReturnType<ByteChannel['read']>,
+    read: () =>
+      (reader.read() as ReturnType<ByteChannel['read']>).catch((error: unknown) => {
+        readFailed = true;
+        throw error;
+      }),
     write: (bytes) => writer.write(bytes),
     close: () =>
       (closing ??= (async () => {
-        const failures: unknown[] = [];
-        // Cancel settles a pending read with done: true; then release both locks and close.
-        await reader.cancel().catch((e: unknown) => failures.push(e));
+        const failures: string[] = [];
+        const step = async (name: string, action: () => Promise<void>) => {
+          try {
+            await action();
+          } catch (error) {
+            failures.push(`${name}: ${describe(error)}`);
+          }
+        };
+        // Cancel settles a pending read with done: true. An errored stream has
+        // nothing to cancel (cancel() only returns its stored error), so skip it.
+        if (!readFailed) await step('reader.cancel', () => reader.cancel());
         reader.releaseLock();
-        await writer.abort().catch((e: unknown) => failures.push(e));
+        await step('writer.abort', () => writer.abort());
         writer.releaseLock();
-        await port.close().catch((e: unknown) => failures.push(e));
-        if (failures.length === 1) throw failures[0];
-        if (failures.length > 1) throw new AggregateError(failures, 'serial port cleanup failed');
+        // Chrome closes a lost Bluetooth port itself; any error here is reported with its name.
+        await step('port.close', () => port.close());
+        if (failures.length > 0) throw new Error(`serial cleanup failed (${failures.join('; ')})`);
       })()),
   };
+}
+
+export function describe(error: unknown): string {
+  if (error instanceof Error) return error.name && error.name !== 'Error' ? `${error.name}: ${error.message}` : error.message;
+  return String(error);
 }

@@ -43,6 +43,6 @@ export const XM5: Profile = {
     write: 'hardware-verified',
     provenance:
       'Layout: ProtocolV2.cpp @ dea3896 (66/67/68 17). Verified on one XM5 unit in H-003 (firmware not recorded): ' +
-      'all modes, voice passthrough, levels 3/12/17. Level 1–20 range: upstream V1 clamp; 1, 2 and 18–20 not yet observed.',
+      'all modes, voice passthrough, levels 3/12/17; H-004 levels 1–20 including both ends.',
   },
 };
