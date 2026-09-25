@@ -116,7 +116,7 @@ A browser write, a protocol ACK and a confirmed setting are treated as three dif
 
 ## Privacy
 
-The page has no backend, analytics or telemetry, and loads no third-party scripts at run time; a strict content-security policy is applied to the build. Protocol data stays in the page. The protocol log is kept in memory only and shown only under **Advanced**.
+The page has no backend and loads no third-party scripts; a strict content-security policy is applied to the build. Protocol data stays in the page. The protocol log is kept in memory only and shown only under **Advanced**.
 
 ## License and credits
 
