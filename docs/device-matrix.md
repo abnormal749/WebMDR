@@ -25,6 +25,26 @@ The service record came from the user's Objective-C diagnostic output. That prot
 
 Personal Bluetooth addresses, device names belonging to other devices, and serial numbers are intentionally omitted.
 
+## H-002 — WH-1000XM5 ambient level change
+
+| Field | Recorded value |
+| --- | --- |
+| Date | 2026-09-25 |
+| Device | Sony WH-1000XM5 (user-operated) |
+| Firmware | Not re-reported for this test (H-001 recorded 2.5.1) |
+| Host / browser | macOS + desktop Chrome; exact versions not recorded |
+| Build | Implementation at commit `628564c`, run from a local working tree before commit; origin (dev server or preview) not recorded |
+| User report | "I can control the ambient level on the browser correctly." |
+| Protocol identified | Inferred from code, not separately reported: controls are enabled only after an init reply (`01 …`) and a schema-valid `67 17 01 …` state reply |
+| Ambient level change | Passed per user report |
+| UI result line (Confirmed / Mismatch / Unknown) | Not recorded |
+| ACK sequence values | Not recorded (log not supplied) |
+| Off / NC / Ambient switching, voice focus | Not reported |
+| Button adoption, close/reopen, power-off during session | Not reported |
+| Deployed Pages origin | Not tested |
+
+No diagnostic log was supplied, so this record contains no protocol capture and no fixture may be labelled as captured from it.
+
 ## Validation vocabulary
 
 Use separate results rather than one ambiguous “supported” badge:
@@ -41,4 +61,4 @@ Use separate results rather than one ambiguous “supported” badge:
 
 For each future report, record date, exact model/firmware, OS/browser versions, app commit, origin, service UUID, feature and result. Missing data should remain missing; do not backfill from unrelated machine history.
 
-No additional model is currently verified in WebMDR. Native upstream support is tracked separately as candidate evidence, not copied into this matrix.
+No other model has been tested in WebMDR. Native upstream support is tracked separately as candidate evidence, not copied into this matrix.

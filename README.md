@@ -8,7 +8,7 @@ Independent project; not affiliated with or endorsed by Sony. **WebMDR is a work
 
 ## Status — 2026-09-25
 
-A first implementation exists: frame codec, session, V2 noise-control operations, a Web Serial transport and a minimal UI, covered by unit tests with a fake transport. **None of it has run against a headset yet.** Do not infer hardware support from the code or the tests.
+A first implementation exists: frame codec, session, V2 noise-control operations, a Web Serial transport and a minimal UI, covered by unit tests with a fake transport. One hardware result exists so far: an ambient level change on the XM5 ([H-002](docs/device-matrix.md)). Other features remain untested on hardware; do not infer support from the code or the tests.
 
 A user-operated prototype on macOS + desktop Chrome successfully selected and opened the WH-1000XM5 control service. Headset firmware was `2.5.1`. Exact browser and macOS versions were not recorded.
 
@@ -18,8 +18,8 @@ A user-operated prototype on macOS + desktop Chrome successfully selected and op
 | RFCOMM open | User reported successful `port.open({ baudRate: 9600 })` |
 | Streams available | User reported both `readable` and `writable` |
 | Frame codec, session, noise-control flow | Unit tests with fake transport and time (no hardware) |
-| Sony protocol exchange / state read | Implemented; not yet tested on hardware — see [hardware test](docs/hardware-test.md) |
-| Setting changes / confirmation | Implemented behind Control mode + explicit opt-in; not yet tested on hardware |
+| Sony protocol exchange / state read | Implied by H-002 (controls enable only after init and a valid state reply) |
+| Setting changes / confirmation | Ambient level change user-reported working on XM5 (H-002); mode switching and voice focus not yet reported |
 | Audio coexistence / reconnect / multipoint | Not yet tested in WebMDR |
 | GitHub Pages deployment | Build and manual-only deploy workflow exist; not yet deployed or tested |
 
