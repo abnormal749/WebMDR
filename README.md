@@ -8,7 +8,7 @@ Independent project; not affiliated with or endorsed by Sony. **WebMDR is a work
 
 ## Status — 2026-09-25
 
-This is a revised design/documentation snapshot, not a finished controller or a runnable application scaffold. Do not infer implemented features from the roadmap.
+A first implementation exists: frame codec, session, V2 noise-control operations, a Web Serial transport and a minimal UI, covered by unit tests with a fake transport. **None of it has run against a headset yet.** Do not infer hardware support from the code or the tests.
 
 A user-operated prototype on macOS + desktop Chrome successfully selected and opened the WH-1000XM5 control service. Headset firmware was `2.5.1`. Exact browser and macOS versions were not recorded.
 
@@ -17,10 +17,11 @@ A user-operated prototype on macOS + desktop Chrome successfully selected and op
 | Filtered service selection | User reported the expected Bluetooth service UUID |
 | RFCOMM open | User reported successful `port.open({ baudRate: 9600 })` |
 | Streams available | User reported both `readable` and `writable` |
-| Sony protocol exchange / state read | Not yet tested in WebMDR |
-| Setting changes / confirmation | Not yet tested in WebMDR |
+| Frame codec, session, noise-control flow | Unit tests with fake transport and time (no hardware) |
+| Sony protocol exchange / state read | Implemented; not yet tested on hardware — see [hardware test](docs/hardware-test.md) |
+| Setting changes / confirmation | Implemented behind Control mode + explicit opt-in; not yet tested on hardware |
 | Audio coexistence / reconnect / multipoint | Not yet tested in WebMDR |
-| GitHub Pages deployment | Planned; the reported probe used localhost |
+| GitHub Pages deployment | Build and manual-only deploy workflow exist; not yet deployed or tested |
 
 See the sanitized [hardware evidence record](docs/device-matrix.md). Opening streams proves transport access, not that a Sony command has succeeded.
 
@@ -103,7 +104,7 @@ Selectively adapt framing, command layouts and useful tests. Independently revie
 
 Sony Device Center carries an MIT license. Preserve required notices for reused material, including in the deployed distribution. Gadgetbridge identifies its code and documentation as AGPLv3: do not assume its source can be translated into an MIT-only project without considering those terms. Record exact file provenance before importing code. [Source inventory](docs/sources.md).
 
-No third-party implementation is imported by this documentation bundle. Choose the repository license deliberately before the first code import.
+Adapted Sony Device Center material is listed file by file in the [reuse manifest](docs/reuse-manifest.md); its MIT notice ships in `THIRD_PARTY_NOTICES.txt`. WebMDR itself is released under the [MIT License](LICENSE).
 
 ## Development milestones
 
@@ -118,10 +119,14 @@ No third-party implementation is imported by this documentation bundle. Choose t
 
 A short passive RX observation is a diagnostic aid, not a prerequisite that must produce data. The audited V2 implementation initiates communication from the host.
 
-The future scaffold should expose deterministic tests, type checking and a production build. This snapshot does not yet contain `package.json`, so no build/test command is represented as already runnable.
+```sh
+npm ci
+npm run dev        # local development server
+npm run verify     # type-check, unit tests, production build, dist checks (same as CI)
+```
 
 ## Deployment and privacy
 
-For a Vite project site at `/webmdr/`, set the matching build base. A user site or custom-domain root uses `/`. GitHub Pages supports HTTPS. Test the deployed origin separately from localhost. [Deployment references](docs/sources.md#browser-and-hosting).
+The build base defaults to `/WebMDR/`, matching this repository's project site; set `WEBMDR_BASE=/` for a user site or custom-domain root. `npm run check:dist` verifies the base, CSP and notices. Deployment runs only through the manually triggered Pages workflow. GitHub Pages supports HTTPS. Test the deployed origin separately from localhost. [Deployment references](docs/sources.md#browser-and-hosting).
 
 Bundle application dependencies rather than loading arbitrary runtime scripts. Keep protocol data local. Diagnostics must be opt-in and reviewed for personal identifiers before export. A browser page is not an always-running native controller; do not promise control after it is closed.
