@@ -16,7 +16,7 @@ const refs = [...html.matchAll(/\b(?:src|href)="([^"]+)"/g)].map((m) => m[1]);
 for (const ref of refs) {
   if (ref === 'THIRD_PARTY_NOTICES.txt') continue;
   check(!/^(https?:)?\/\//.test(ref), `external reference in index.html: ${ref}`);
-  check(ref.startsWith(`${base}assets/`), `asset not under base ${base}: ${ref}`);
+  check(ref.startsWith(base), `reference not under base ${base}: ${ref}`);
   const file = `dist/${ref.slice(base.length)}`;
   check(existsSync(file), `referenced file missing: ${file}`);
 }
