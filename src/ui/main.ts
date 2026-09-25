@@ -11,6 +11,9 @@ import {
   requestServicePort,
   type SerialPortLike,
 } from '../transport/webSerial';
+import { disconnectOnPageHide } from './lifecycle';
+
+declare const __WEBMDR_BUILD__: string;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const ui = {
@@ -32,6 +35,7 @@ const ui = {
   change: $('change'),
   diag: $<HTMLInputElement>('diag'),
   log: $<HTMLPreElement>('log'),
+  build: $('build'),
 };
 
 const MAX_LOG_LINES = 400;
@@ -40,7 +44,8 @@ const serial = getSerial();
 const controller = new Controller(XM5, {
   onLog: (line) => {
     if (!ui.diag.checked) return;
-    logLines.push(`${new Date().toISOString().slice(11, 23)} ${line}`);
+    if (logLines.length === 0) logLines.push(`WebMDR build ${__WEBMDR_BUILD__} at ${location.origin}; times are UTC`);
+    logLines.push(`${new Date().toISOString().slice(11, 23)}Z ${line}`);
     if (logLines.length > MAX_LOG_LINES) logLines.splice(0, logLines.length - MAX_LOG_LINES);
     ui.log.textContent = logLines.join('\n');
   },
@@ -106,11 +111,39 @@ ui.diag.addEventListener('change', () => {
   }
 });
 
-// Commit only on explicit, completed interactions ('change', not 'input').
 ui.ncMode.addEventListener('change', (e) => controller.commit({ mode: (e.target as HTMLInputElement).value as NoiseMode }));
-ui.level.addEventListener('input', () => (ui.levelOut.value = ui.level.value));
-ui.level.addEventListener('change', () => controller.commit({ level: Number(ui.level.value) }));
 ui.voice.addEventListener('change', () => controller.commit({ voice: ui.voice.checked }));
+
+// Live level adjustment. H-003 measured 45–119 ms per confirmed change; the
+// controller keeps one change in flight plus only the latest pending level, so
+// dragging never builds a backlog of obsolete positions.
+let lastLevelCommit: number | undefined; // within the current interaction
+let draggingLevel = false;
+function commitLevel(): void {
+  ui.levelOut.value = ui.level.value;
+  const level = Number(ui.level.value);
+  if (level === lastLevelCommit) return; // 'change' repeats the last 'input' value
+  lastLevelCommit = level;
+  controller.commit({ level });
+}
+function endLevelDrag(): void {
+  if (!draggingLevel) return;
+  draggingLevel = false;
+  render(controller.state);
+}
+ui.level.addEventListener('pointerdown', () => {
+  draggingLevel = true;
+  lastLevelCommit = undefined;
+});
+ui.level.addEventListener('input', commitLevel);
+ui.level.addEventListener('change', () => {
+  commitLevel();
+  lastLevelCommit = undefined;
+});
+window.addEventListener('pointerup', endLevelDrag);
+window.addEventListener('pointercancel', endLevelDrag);
+
+disconnectOnPageHide(window, () => controller.disconnect(), (error) => console.error('WebMDR: disconnect on page hide failed', error));
 
 serial?.addEventListener?.('connect', () => render(controller.state));
 serial?.addEventListener?.('disconnect', () => render(controller.state));
@@ -167,11 +200,13 @@ function renderNoise(state: ControllerState): void {
   if (device && !inFlight && !queued) {
     const mode = modeOf(device.raw);
     for (const r of ui.ncMode.querySelectorAll<HTMLInputElement>('input')) r.checked = r.value === mode;
-    ui.level.value = String(device.raw.level);
+    // Never move the thumb under the user's pointer while dragging.
+    if (!draggingLevel) ui.level.value = String(device.raw.level);
     ui.voice.checked = device.raw.voice === 1;
   }
   // Without device state there is no level to show; the slider position is only a presentation default.
   ui.levelOut.value = device ? ui.level.value : '—';
+  ui.build.textContent = __WEBMDR_BUILD__;
   ui.ncMode.disabled = !editable;
   ui.ncAmbient.disabled = !editable || !device || modeOf(device.raw) !== 'ambient';
 

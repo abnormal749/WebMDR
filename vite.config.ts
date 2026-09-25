@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
@@ -19,6 +20,18 @@ export const CSP = [
   "object-src 'none'",
 ].join('; ');
 
+/** Commit shown in the page footer and diagnostics header, so hardware reports can name the build. */
+function buildId(): string {
+  if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA.slice(0, 7);
+  try {
+    const sha = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+    return execSync('git status --porcelain', { encoding: 'utf8' }).trim() ? `${sha}+dirty` : sha;
+  } catch (error) {
+    console.warn(`build id unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    return 'unknown';
+  }
+}
+
 function productionHardening(): Plugin {
   return {
     name: 'webmdr-production',
@@ -37,6 +50,7 @@ function productionHardening(): Plugin {
 export default defineConfig(({ command, isPreview }) => ({
   base: command === 'build' || isPreview ? (process.env.WEBMDR_BASE ?? PAGES_BASE) : '/',
   plugins: [productionHardening()],
+  define: { __WEBMDR_BUILD__: JSON.stringify(buildId()) },
   build: {
     target: 'es2022',
     sourcemap: false,

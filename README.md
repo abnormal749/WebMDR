@@ -8,7 +8,7 @@ Independent project; not affiliated with or endorsed by Sony. **WebMDR is a work
 
 ## Status — 2026-09-25
 
-A first implementation exists: frame codec, session, V2 noise-control operations, a Web Serial transport and a minimal UI, covered by unit tests with a fake transport. One hardware result exists so far: an ambient level change on the XM5 ([H-002](docs/device-matrix.md)). Other features remain untested on hardware; do not infer support from the code or the tests.
+A first implementation exists: frame codec, session, V2 noise-control operations, a Web Serial transport and a minimal UI, covered by unit tests with a fake transport. On one WH-1000XM5, a captured session ([H-003](docs/device-matrix.md)) shows initialization, state reads and every noise-control change confirmed by device read-back. That is one unit; other units, firmware versions and models remain untested.
 
 A user-operated prototype on macOS + desktop Chrome successfully selected and opened the WH-1000XM5 control service. Headset firmware was `2.5.1`. Exact browser and macOS versions were not recorded.
 
@@ -18,10 +18,10 @@ A user-operated prototype on macOS + desktop Chrome successfully selected and op
 | RFCOMM open | User reported successful `port.open({ baudRate: 9600 })` |
 | Streams available | User reported both `readable` and `writable` |
 | Frame codec, session, noise-control flow | Unit tests with fake transport and time (no hardware) |
-| Sony protocol exchange / state read | Implied by H-002 (controls enable only after init and a valid state reply) |
-| Setting changes / confirmation | Ambient level change user-reported working on XM5 (H-002); mode switching and voice focus not yet reported |
+| Sony protocol exchange / state read | Captured on XM5 (H-003): init reply, state reads, ACK sequence rule |
+| Setting changes / confirmation | Off / NC / Ambient, levels 3–17 and voice passthrough confirmed by read-back on one XM5 (H-003) |
 | Audio coexistence / reconnect / multipoint | Not yet tested in WebMDR |
-| GitHub Pages deployment | Build and manual-only deploy workflow exist; not yet deployed or tested |
+| GitHub Pages deployment | Live at https://abnormal749.github.io/WebMDR/ (loads, CSP active); a hardware test from that origin is not yet recorded |
 
 See the sanitized [hardware evidence record](docs/device-matrix.md). Opening streams proves transport access, not that a Sony command has succeeded.
 
@@ -54,7 +54,7 @@ Treat these states separately: authorized port, device available, RFCOMM open, p
 
 The initial release should establish a session, read the headset's current noise-control state, switch ANC / Ambient / Off, and adjust the XM5's Ambient level. Focus on Voice follows only when its encoding and interaction with levels are checked.
 
-Start by transmitting a slider change when the user commits it, not on every pointer movement. Live adjustment can follow once transaction timing is measured.
+H-003 measured 45–119 ms from a change to its confirming read-back, so the Ambient level slider now adjusts live while dragging. The controller keeps one change in flight and only the latest pending position; intermediate positions are dropped, never queued.
 
 There is no early requirement for EQ, DSEE, accounts, telemetry, firmware updates, a PWA service worker, or support for every model listed upstream.
 

@@ -24,7 +24,7 @@
         </fieldset>
         <label class="optin" id="optin-row" hidden>
           <input autocomplete="off" type="checkbox" id="optin" />
-          I am running an opted-in hardware test. Setting changes use source-reviewed byte layouts that WebMDR has not verified on hardware.
+          I am running an opted-in hardware test. Setting changes are experimental: confirmed on one WH-1000XM5 in testing, not on other units or firmware versions.
         </label>
         <div class="buttons">
           <button id="choose" type="button">Choose headset…</button>
@@ -49,7 +49,7 @@
           <legend>Ambient sound</legend>
           <label for="level">Level <output id="level-out" for="level"></output></label>
           <input autocomplete="off" id="level" type="range" min="1" max="20" step="1" />
-          <label><input autocomplete="off" type="checkbox" id="voice" /> Focus on voice</label>
+          <label><input autocomplete="off" type="checkbox" id="voice" /> Voice passthrough (focus on voice)</label>
         </fieldset>
         <p id="change" class="change" aria-live="polite"></p>
       </section>
@@ -61,7 +61,7 @@
       </section>
 
       <footer>
-        <p>WebMDR is an independent project. Includes material adapted from Sony Device Center (MIT) — <a href="THIRD_PARTY_NOTICES.txt">third-party notices</a>.</p>
+        <p>WebMDR is an independent project. Includes material adapted from Sony Device Center (MIT) — <a href="THIRD_PARTY_NOTICES.txt">third-party notices</a>. Build <code id="build"></code>.</p>
       </footer>
     </main>
     <script type="module" src="/src/ui/main.ts"></script>

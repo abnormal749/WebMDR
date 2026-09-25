@@ -6,7 +6,7 @@ Unit tests use a fake transport and fake time. They do not show that any byte wo
 
 - Record: date, headset model and firmware, OS and browser **exact** versions, WebMDR commit (`git rev-parse HEAD`), origin (`http://localhost:5173` or the Pages URL).
 - `npm ci && npm run dev`, open the printed localhost URL in desktop Chrome.
-- Enable **Diagnostics**. The log contains frame bytes only. Review it before sharing; do not add device names, addresses or serial numbers.
+- Enable **Diagnostics**. Its first line records the WebMDR build and origin; times are UTC. The log otherwise contains frame bytes only. Review it before sharing; do not add device names, addresses or serial numbers.
 
 ## Steps and what each result shows
 
